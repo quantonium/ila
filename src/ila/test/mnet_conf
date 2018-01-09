@@ -1,0 +1,5 @@
+#!/bin/bash -E
+
+CWD=pwd
+
+sudo QDIR=$QDIR PYTHONPATH="$QDIR/lib:$CWD" python3 mnet_conf.py

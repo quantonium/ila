@@ -1,0 +1,213 @@
+ila test
+
+This directory contains some test scripts and utilities for testing
+ILA.
+
+
+Test topology
+-------------
+
+The test creates an emulated "network in a box" with the following
+topology:
+
+                     +--------------+    +--------------+
+                     |    Gateway   |    |     Host     |
+                     |    (gw_1)    +----+   (host_1)   |
+                     |              |    |              |
+                     +--------------+    +--------------+
+                             |
+                     +--------------+
+                     |     RAN      |
+                     |   (ran_1)    |
+                     |              |
+                     +--------------+
+                             |
+     +--------------+ +--------------+       +--------------+
+     |    eNodeB    | |    eNodeB    |  ...  |    eNodeB    |
+     |    (enb_1)   | |    (enb_2)   |       |    (enb_10)  |
+     +--------------+ +--------------+       +--------------+
+       |         |      |         |            |         |
+       UE  ...   UE     UE  ...   UE           UE  ...   UE
+     (ue_1)   (ue_10)  (ue_11)  (ue_20)      (ue_91)     (ue_100)
+
+There are 100 emulated UEs, ten emulated eNodeBs, one RAN (represents
+the routing infrastructure), one gateway, and one emulated host on the
+Internet. Each of the above nodes is emulated in a network namespace
+with the initial connectivity to other nodes as shown (namespace
+names are in parenthesis). ILA runs in the gateway and eNodeBs.
+
+Once the topology is created, UEs can move between eNodeBs to
+demonstrate ILA mobility.
+
+
+Prerequisites
+-------------
+
+Please consult the README in the top level subdirectory to build and install
+ILA components.
+
+Set environment variable QDIR to the installation directory. e.g.:
+
+   export QDIR=~/quantonium/install
+
+
+Setting up the test topology
+----------------------------
+
+Run mnet_conf without arguments. Output should look something like
+this... (<<<<< indicates comments)
+
+<<<<< Make ran_1 namespace
+Make RAN 1
+
+<<<<<< Start the three ILA database instances. These run in ran_1 namespace
+035:C 09 Jan 13:17:30.426 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+3035:C 09 Jan 13:17:30.426 # Redis version=4.0.6, bits=64, commit=c9cb699b, modified=0, pid=3035, just started
+3035:C 09 Jan 13:17:30.426 # Configuration loaded
+3039:C 09 Jan 13:17:30.469 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+3039:C 09 Jan 13:17:30.471 # Redis version=4.0.6, bits=64, commit=c9cb699b, modified=0, pid=3039, just started
+3039:C 09 Jan 13:17:30.471 # Configuration loaded
+3044:C 09 Jan 13:17:30.503 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+3044:C 09 Jan 13:17:30.503 # Redis version=4.0.6, bits=64, commit=c9cb699b, modified=0, pid=3044, just started
+3044:C 09 Jan 13:17:30.503 # Configuration loaded
+
+<<<<< Make eNodeB nodes
+Make ENB 1
+Make ENB 2
+...
+Make ENB 10
+
+<<<<< Make the gateway node
+Make gateway 1
+
+<<<<< Start ilad daemon on each eNodeB
+Start enb ilad 1
+Start enb ilad 2
+...
+Start enb ilad 10
+
+<<<<< Start ilad daemon on the gateway
+Start gate ilad 1
+
+<<<<< Make the UEs. Note the addresses that are assigned.
+Make UE ue_1 with address 3333:0:0:0::1
+Make UE ue_2 with address 3333:0:0:0::2
+...
+Make UE ue_100 with address 3333:0:0:0::64
+
+<<<<< Make the host node
+Make host 1
+
+<<<<< Attach each UE to an eNodeB
+Attach UE 1 to enb 1
+Attach UE 2 to enb 1
+...
+Attach UE 100 to enb 10
+
+
+Inspecting the databases
+------------------------
+
+The ilac command is used to inspect and manipulate databases. ilac_ns
+allows running the ilac command in a namespace. In this test topology
+the databases are run in the ran_1 namespace, so the ilac_ns command takes
+ran_1 as the first argument. The arguments following are for the
+ilac command.
+
+To get the list of identifiers:
+
+    ilac_ns ran_1 ident list
+
+  Returns something like:
+
+    33 3333::21 4
+    ...
+    29 3333::1d 3
+    62 3333::3e 7
+
+  Where the first number is an index of the identifier, the second
+  is the SIR address, and the last number is the index of the eNodeB
+  the identifier node is currently attached to.
+
+To get the list of locators:
+
+    ilac_ns ran_1 loc list
+
+  Returns something like:
+
+    10 2017:0:0:a
+    8 2017:0:0:8
+    ....
+    1 2017:0:0:1
+
+  Where the first number is an index of the locator, the second is the
+  64-bit locator.
+
+To get the list of the mapping table:
+
+    ilac_ns ran_1 map list
+
+  Returns something like:
+
+    3333::58 2017:0:0:9 * neutral-map-auto luid output
+    3333::4a 2017:0:0:8 * neutral-map-auto luid output
+    ....
+    3333::26 2017:0:0:4 * neutral-map-auto luid output
+
+  The field is the SIR address, the next is the 64-bit locator for the
+  identifier. The rest of the fields are parameters for ILA.
+
+The other ilac commands (like get, make, flush, etc.) can also be
+used.
+
+
+Inspecting the routing table
+----------------------------
+
+ILA routes are listed as normal routes in the kernel routing table
+using the "ip" command. ip_ns runs an ip command in a network
+namespace.
+
+For example:
+
+  ip_ns enb_5 -6 route get 3333::64
+
+Returns something like:
+
+  3333::64 from ::  encap ila  2017:0:0:a  csum-mode neutral-map-auto  
+  ident-type luid  hook-type output via 1112:5::8000:0:0:1 dev veth0_enb5
+  proto ila src 1112:5:0:0:8000:: metric 1024 pref medium
+
+
+Create traffic
+--------------
+
+Packets can flow between UEs are between a UE and the host. run_ns is used
+to run a command in a network namespace. For instance, to ping UE 46 from
+UE 28 one could do:
+
+  run_ns ue_28 ping 3333::2e
+
+To ping from the emulated host on the Internet:
+
+  run_ns host_1 ping 3333::2e
+
+
+Mobility
+--------
+
+A UE can move from one eNodeB to another. the attach command is used
+for this. The arguments of the command are the UE number (identifier index)
+and the target eNodeB number (locator index).
+
+For example,
+
+    attach 67 2
+
+Attaches UE 67 to eNodeB 2. So then
+
+    ilac_ns ran_1 ident get 67
+
+now returns
+
+    67 3333::43 2

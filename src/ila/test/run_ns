@@ -1,0 +1,3 @@
+#!/bin/bash
+
+sudo QDIR=$QDIR PYTHONPATH="$QDIR/lib:$CWD" python3 run_ns.py "$@"
