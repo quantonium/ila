@@ -2,7 +2,7 @@ include ../config.mk
 
 TOPTARGETS := all clean install
 
-SUBDIRS = iputil qutil
+SUBDIRS = iputil qutil qmodules
 
 $(TOPTARGETS) : $(SUBDIRS)
 
