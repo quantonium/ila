@@ -1,0 +1,54 @@
+# Prerequsisites:
+
+# Linux 4.15 kernel or later. Instructions to build a kernel are in
+# https://kernelnewbies.org/KernelBuild
+
+# Basics for build (borrowed from Linux kernel dependencies
+
+sudo apt-get install libncurses5-dev gcc make git exuberant-ctags bc libssl-dev
+
+sudo apt-get install libmnl-dev libevent-dev redis-server libhiredis-dev
+sudo apt-get install pkg-config bison flex python3-pip
+
+pip3 install redis
+
+# Top level directoy or another high level directory
+TOPDIR=~/quantonium
+
+# Install directoy
+QDIR=$TOPDIR/install
+
+# Get ILA source code
+mkdir $TOPDIR
+cd $TOPDIR
+git clone https://github.com/quantonium/ila.git
+
+# Build ILA
+cd $TOPDIR/ila/src
+./configure
+make
+make INSTALLDIR=$QDIR install
+
+# Get third party
+mkdir $TOPDIR/third_party
+cd $TOPDIR/third_party
+git clone https://github.com/quantonium/iproute2.git
+git clone https://github.com/quantonium/redis.git
+
+# Build iproute2
+cd $TOPDIR/third_party/iproute2
+./configure
+make
+make DESTDIR=$QDIR install
+
+# Build redis
+cd $TOPDIR/third_party/redis
+make
+make PREFIX=$QDIR install
+
+# Directories for log of Redis server instances
+mkdir -p ~/redis
+mkdir ~/redis/6379
+mkdir ~/redis/6380
+mkdir ~/redis/6381
+
