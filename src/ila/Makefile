@@ -1,8 +1,6 @@
-include ../config.mk
-
 TOPTARGETS := all clean install
 
-SUBDIRS = iputil qutil
+SUBDIRS = ilad ilactld
 
 $(TOPTARGETS) : $(SUBDIRS)
 
