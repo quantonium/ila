@@ -1,6 +1,6 @@
 TOPTARGETS := all clean install
 
-SUBDIRS = ilad ilactld
+SUBDIRS = ilad ilactld ilac
 
 $(TOPTARGETS) : $(SUBDIRS)
 
