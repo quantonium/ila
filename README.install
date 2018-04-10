@@ -52,3 +52,4 @@ mkdir ~/redis/6379
 mkdir ~/redis/6380
 mkdir ~/redis/6381
 
+cd $TOPDIR
