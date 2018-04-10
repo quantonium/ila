@@ -47,9 +47,9 @@ make
 make PREFIX=$QDIR install
 
 # Directories for log of Redis server instances
-mkdir -p ~/redis
-mkdir ~/redis/6379
-mkdir ~/redis/6380
-mkdir ~/redis/6381
+sudo mkdir -p /var/redis
+sudo mkdir /var/redis/6379
+sudo mkdir /var/redis/6380
+sudo mkdir /var/redis/6381
 
 cd $TOPDIR
