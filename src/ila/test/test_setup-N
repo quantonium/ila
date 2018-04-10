@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Test script to start an ILA-N.
+# The program takes four arguments: locator of the ILAN-N
+# (X:X:X:X format), locator address of the ILA-N,
+# SIR prefix (X:X:X:X format), and the device. Optionally,
+# a list of SIR addresses to configure may be added beyond
+# the fourth argument.
+
+if [ "$#" -lt 4 ]; then
+	echo "Usage: test_setup-N <sir_prefix> <locator> <locator_addr> <device> [<SIR_address> ... ]"
+	exit 1
+fi
+
+sirprefix=$1
+locator=$2
+locator_add=$3
+device=$4
+
+shift 4
+
+# Configure locator address
+sudo $QDIR/sbin/ip addr add ${locator_add}/64 dev $device
+
+$QDIR/bin/ilactl ILA-N stop
+
+$QDIR/bin/ilactl ILA-N start ${sirprefix} ${locator}
+
+# Configure local SIR addresses
+for var in "$@"
+do
+    echo "$var"
+	sudo $QDIR/sbin/ip addr add ${var}/64 dev $device
+done
+

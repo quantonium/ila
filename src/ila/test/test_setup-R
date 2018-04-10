@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Test script to start an ILA-R and colocated ILA-M..
+# The program takes four arguments: default via
+# (next hop default router for ILA mappings), locator
+# address and locator ID (only one locator is set up
+# in this test), and device. Optionally, a list of SIR
+# addresses to configure may be added beyond the fourth
+# argument.
+
+if [ "$#" != 4 ]; then
+        echo "Usage: test_setup-R <default_via> <loc_addr> <loc_id> <device>"
+        exit 1
+fi
+
+defaultvia=$1
+locator=$2
+locid=$3
+device=$4
+
+shift 4
+
+$QDIR/bin/ilactl ILA-R stop
+$QDIR/bin/ilactl ILA-M stop
+
+$QDIR/bin/ilactl ILA-M start
+
+sleep 1
+$QDIR/bin/ilactl ILA-R start ${defaultvia} ${device}
+
+$QDIR/bin/ilac loc make ${locid} ${locator}
+
+# Configure local SIR addresses
+for var in "$@"
+do
+    echo "$var"
+        sudo $QDIR/sbin/ip addr add ${var}/64 dev $device
+done
+
