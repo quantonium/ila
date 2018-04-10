@@ -11,7 +11,9 @@ all: $(TARGETS)
 libqutil.a: $(UTILOBJ) $(ADDLIB)
 	$(QUIET_AR)$(AR) rcs $@ $^
 
-install:
+install: $(TARGETS)
+	$(QUIET_INSTALL)$(INSTALL) -m 0755 $< $(INSTALLDIR)$(ILIBDIR)
+
 
 clean:
 	@rm -f $(UTILOBJ) $(ADDLIB) $(TARGETS)
