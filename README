@@ -1,4 +1,4 @@
-Identifier Locator Address (ILA)
+Identifier Locator Addressing (ILA)
 
 License
 -------
@@ -32,23 +32,206 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Description
 -----------
 
-This software includes the userspace daemons, managemnt commands, and
+This software includes the userspace daemons, management commands, and
 database definitions for ILA.
 
 
-READMEs
--------
+Installation
+------------
 
-README.install - provides instructions on building and installing ILA.
+README.install contains instructions on install ILA. This is a sourceable
+file on Ubunutu systems. It includes getting prerequisite packages,
+cloning the ila repository, as well as a redis and iproute2 repository.
+It sets of configuration for running redis. It also build the ILA
+daemons, redis, and iproute2 code. Binaries and libraries are installed
+in ~/quantonium/install.
 
-src/ila/test/README - provides instructions on running the ILA
-		      "network in a box" test.
+
+Directory structure
+-------------------
+
+ILA is typically installed under the top level directory ~/quantonium. The
+ILA install script (README.install) puts ILA in ~/quantonium. The
+~/quantonium directory will also contain third party software.
+
+Under the top level directory is the tree:
+
+ila - ILA files
+    src - ILA source
+        ila - ILA specific source files
+            ilac - Source for utility function to manipulate ILA DBs
+            ilactl - Utility to start and stop ILA-M, ILA-R, and ILA-Ns
+            ilactld - ILA control daemon
+            ilad - ILA daemon
+            redis - Redis configuration for ILA
+            test - Test files for ILA
+        include - various include files
+        lib - libraries for ILA
+            iputil - Common IP utility functions (taken from open source)
+            qmodules - Python utilities for ILA
+            qutils - "Quantonium utilities". This is includes dbif which
+                      is an abstracted interface for the backend databases.
+                      Redis can be swapped out with a different database
+                      by implementing the interface for the new DB
+
+install - Directory where ILA files are installed during build. This includes
+            binaries, libraries, third party executables, etc.
+
+third_party - Third party code. This is typically a stable snapshot of an
+            upstream repository that contains required functionality for ILA
+            userspace code
+    iproute2 - Snapshot of iproute2 (for "ip" command, etc.)
+    redis - Snapshot of redis DB source
+
+Additional the related GTP gateway code may be installed under the top level
+directory:
+
+gw - code for ILA ready SAEGW
+    vpp - VPP UP (https://github.com/quantonium/vpp.git)
+    ergw - Erlang CP GW (https://github.com/quantonium/erlang.git)
+
+For more information consult the associated READMEs
+
+Requirements
+------------
+
+ILA requires kernel support. This should 4.15 version of Linux or later.
+
+Additionally, ILA needs specific version of redis and iproute2. These
+are installed as part of README.install script.
+
+QDIR environment variable
+-------------------------
+
+IMPORTANT: The QDIR environment variable must be set for ILA commands to
+function properly! For the typical installation (per README.install) this
+would be:
+
+export QDIR=~/quantonium/install
+
+Utilities
+---------
+
+***** $QDIR/bin/ilac
+
+This utility allows viewing and manipulating an ILA database (one of loc,
+ident, and map).
+
+To get help enter the command with no arguments.
+
+Examples:
+
+  - Show identifier database
+
+      tom2@quantonium-1:~$ $QDIR/bin/ilac ident list
+      17 2222::11 113
+      16 2222::10 113
+
+  - Show locator database
+
+    tom2@quantonium-1:~$ $QDIR/bin/ilac loc list
+    113 8888:0:0:113
+
+  - Show mapping database
+
+    tom2@quantonium-1:~$ $QDIR/bin/ilac map list
+    2222::11 8888:0:0:113 * neutral-map-auto luid output
+    2222::10 8888:0:0:113 * neutral-map-auto luid output
+
+***** $QDIR/bin/ilactl
+
+This utility starts or stops and ILA node (an ILA-M, ILA-N, or ILA-N)
+
+To get help enter the command with no arguments.
+
+Examples:
+
+  - Start ILA-M
+
+    tom2@quantonium-1:~$ $QDIR/bin/ilactl ILA-M start
+    <<< redis startup output >>>
+
+  - Stop ILA-M
+
+    tom2@quantonium-1:~$ $QDIR/bin/ilactl ILA-M stop
+
+  - Start ILA-R
+
+    tom2@quantonium-1:~$ $QDIR/bin/ilactl ILA-R start \
+                fd00:4888:2000:2062::113 ens4
+    ilad: no process found
+    rmmod: ERROR: Module ila is in use
+    Host ::1 port 6379
+
+  - Stop ILA-R
+
+    tom2@quantonium-1:~$ $QDIR/bin/ilactl ILA-R stop
+
+  - Start ILA-N
+
+    tom2@quantonium-2:~$ $QDIR/bin/ilactl ILA-N start 8888:0:0:113 2222:0:0:0
+    rmmod: ERROR: Module ila is not currently loaded
+
+  - Stop ILA-N
+
+    tom2@quantonium-2:~$ $QDIR/bin/ilactl ILA-N stop
+
+***** $QDIR/sbin/ip
+
+This is the common "ip" command from iproute2. There are couple subcommands of
+interest for ila.
+
+  - Show SIR to ILA translations in kernel
+
+  tom2@quantonium-2:~$ $QDIR/sbin/ip ila list
+  8888:0:0:113        2222:0:0:0          *               neutral-map-autoluid
+
+  - Show an ILA route 
+
+  tom2@quantonium-1:~$ $QDIR/sbin/ip -6 route get 2222::10
+  2222::10 from ::  encap ila  8888:0:0:113  csum-mode neutral-map-auto  ident-type luid  hook-type output via fd00:4888:2000:2062::113 dev ens4 proto 18 src fd00:4888:2000:2062::103 metric 1024 pref medium
+
+Daemons
+--------
+
+There are two daemons for ILA: ilactld and ilad.
+
+ilactld is run by ILA-M. This daemon monitors the ILA ident database.
+The ident database holds the identifier to locator ID mapping. This database
+is intended to be populated by the mobility manager. It is dynamic, when a
+device changes location the ident database entry is updated. The daemon
+also monitors the loc database the contains the active locators in the
+system. Each locator is keyed by an index that is used in the identifier
+to locator mapping in the ident database.
+
+When the ilactld detects a change (ie. a UE change location, was connected,
+or disconnected) the daemon writes a corresponding entry in the ILA mapping
+database that contains the full information for nodes to instantiate a
+mapping.
+
+The ilad monitors the ILA mapping database for changes. When a change is
+detected the daemon sets ILA LWT routes in the kernel as needed. The kernel
+route is a host route that indicates ILA transformation should happen and the
+given locator. Mapping information also contains other parameters for
+ILA transformation such as checksum neutral settings.
+
+Testing
+--------
+
+ila/src/ila/test contains a standalone test of ILA functionality. This
+emulates a mobile "network in a box" using network namespaces. Please see
+ila/src/ila/test/README
+
+Additionally, the associated VPP code base contains a test for ILA between
+two hosts that is managed by VPP. test_setup-N and test_setup-R in
+ila/src/ila/test are used in this test. See
+https://github.com/quantonium/vpp/blob/feature/gtp-up/README.vpp
 
 
-ILA documenation
+ILA documentation
 ----------------
 
-For more inforation on ILA see:
+For more information on ILA see:
 
 * ILA Internet draft
      https://datatracker.ietf.org/doc/draft-herbert-intarea-ila/
@@ -58,3 +241,4 @@ For more inforation on ILA see:
 
 * Linux kernel documentation
      https://github.com/torvalds/linux/blob/master/Documentation/networking/ila.txt
+
