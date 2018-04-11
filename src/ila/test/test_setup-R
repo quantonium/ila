@@ -8,7 +8,7 @@
 # addresses to configure may be added beyond the fourth
 # argument.
 
-if [ "$#" != 4 ]; then
+if [ "$#" -lt 4 ]; then
         echo "Usage: test_setup-R <default_via> <loc_addr> <loc_id> <device>"
         exit 1
 fi
