@@ -1,0 +1,36 @@
+Quickstart guide for ILA
+========================
+
+1) It's recommended that you read the ILA README which is in
+   https://github.com/quantonium/ila/blob/master/README and familiarize
+   yourself with ILA commands as well as ILA terminolgy and basic architecture
+
+2) Ubunutu is recommended. README.install is a sourceable script on Ubuntu
+
+3) Linux kernel version 4.15 or later is required for ILA. See
+   https://www.kernel.org/ and follow instructions for loading a supported
+   kernel version
+
+4) Instructions for installing ILA are in README.install. This can be
+   sourced on Ubuntu by:
+
+   wget https://raw.githubusercontent.com/quantonium/ila/master/README.install \        -O /tmp/README.install
+   source /tmp/README.install
+
+5) A basic test of ILA wth an emulated RAN network using network is described
+   in https://github.com/quantonium/ila/blob/master/src/ila/test/README. To
+   run the test do:
+
+   export QDIR=~/quantonium/install
+   cd ~/quantonium/ila/src/ila/test
+   ./mnet_conf
+   ./run_ns ue_1 ping6 3333::44
+
+6) If all went well the ping6 should succeed and ILA is being used over
+   the emulated RAN
+
+7) The next step is probably to bring up the ILA-GTP-VPP code and
+   run the standalone test for that. Instructions to install, build,
+   run VPP, and to run the standalone test (emulated calls) are in
+   https://github.com/quantonium/vpp/blob/feature/gtp-up/README.
+
