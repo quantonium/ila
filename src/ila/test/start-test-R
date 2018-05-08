@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# Start ILA-R for simple case. This starts up the ILA-R and configures
+# one locator with address 8888:0:0:121 and locator index 121. The
+# peer ILA-N should be configured and started accordingly. The
+# argument is the via for the ILA-N (either a default route or
+# its address on the link.
+
+if [ "$#" -ne 1 ]; then
+        echo "Usage: start_test-R <ila-n-addr>"
+        exit 1
+fi
+
+ila_n_addr=$1
+
+$QDIR/../ila/src/ila/test/test_setup-R $ila_n_addr 8888:0:0:121 121 ens4

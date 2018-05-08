@@ -1,0 +1,312 @@
+VPP/ILA test
+============
+
+The is a test of ILA-N, ILA-R, ILA-M and the ILA datapath that originates
+from VPP. This does not include the GTP GW datapath, however the packet
+forwarding interface exercised here is the same as that which would be
+used by GTP tunnels. In this sense, ILA and GTP tunnels are independent
+(packets received over a GTP tunnel use normal forwarding to be sent
+over ILA).
+
+This test is for the most basic scenario that consists of a single ILA-R
+and ILA-N. The following functionality is tested:
+
+ * ILA-R, ILA-N, and ILA-M
+ * One instance of each. ILA-R and ILA-M run in one VM, ILA-N runs in another
+ * ILA-R runs ilad and ilactld
+ * ILA-N runs vpp 
+ * ILA database entries and ILA routes
+ * Loc, Ident, and Map databases
+ * Kernel routing entries are populated on ILA-N 
+ * Traffic flow
+ * Ping from emulated UE to ILA-R
+ * Forward path just IPv6 routing
+ * Reverse path is ILA
+
+Two servers (VMs) are required for the test. One serves as the ILA-R/M
+the other serves as the ILA-N. The tests configure a SIR prefix of
+2222::/64 and a locator prefix starting with 8888. Local address
+configuration is done as described below.
+
+
+On the ILA-N, vpp requires three interfaces. This should be in the same
+network, have configured addresses, and have the same default router. We assume
+these interfaces are ens4, ens5, and ens6.
+
+The steps for running the test are:
+
+** Prequsisites
+===============
+
+Install ILA code per https://raw.githubusercontent.com/quantonium/ila/master/README.quickstart
+
+Install and build vpp_ila code per
+https://raw.githubusercontent.com/quantonium/vpp/feature/gtp-up/README.vpp
+
+** 1. On ILA-R:
+===============
+
+Start the ILA-R with test configuration. RUN:
+
+	cd $QDIR/../ila/src/ila/test
+	./start-test-R <ila-n-address>
+
+This should start both the ILA-R and ILA-M. Output should show the three redis
+databases starting. The output may include errors for "process not found" or
+"Module ila is not currently loaded"; those can be ignored.
+
+Here is example output on my server:
+
+	% ./start-test-R fd00:4888:2000:2062::121
+	[sudo] password for tom2: 
+	ilad: no process found
+	rmmod: ERROR: Module ila is not currently loaded
+	redis-server: no process found
+	ilactld: no process found
+	redis-server: no process found
+	ilactld: no process found
+	1944:C 08 May 20:20:30.163 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+	1944:C 08 May 20:20:30.164 # Redis version=4.0.6, bits=64, commit=c9cb699b, modified=0, pid=1944, just started
+	1944:C 08 May 20:20:30.164 # Configuration loaded
+	1946:C 08 May 20:20:30.167 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+	1946:C 08 May 20:20:30.167 # Redis version=4.0.6, bits=64, commit=c9cb699b, modified=0, pid=1946, just started
+	1946:C 08 May 20:20:30.167 # Configuration loaded
+	1951:C 08 May 20:20:30.171 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+	1951:C 08 May 20:20:30.171 # Redis version=4.0.6, bits=64, commit=c9cb699b, modified=0, pid=1951, just started
+	1951:C 08 May 20:20:30.171 # Configuration loaded
+	ilad: no process found
+	rmmod: ERROR: Module ila is not currently loaded
+	Host ::1 port 6379
+
+After the commmand has run, the database server should running as well as
+ilactld (ILA-M) and ilad (ILA-R) damones. The databases can be inspected using
+the ilac command (e.g. "$QDIR/bin/ilac loc list") and ps can be used to see
+ilad and ilactld processes.
+
+** 2. On ILA-N:
+===============
+
+Start the ILA-R with test configuration. RUN:
+
+	cd $QDIR/../ila/src/ila/test
+	./start-test-N
+
+This should start ILA-N (not vpp yet). This sets ups the locator in the
+ILA routing tables.
+
+Here is an example output on my server:
+
+	%./start-test-N 
+	net.ipv6.conf.all.forwarding = 1
+	rmmod: ERROR: Module ila is not currently loaded
+
+The error "Module ila is not currently loaded" can be ignored
+
+** 3. On ILA-N:
+===============
+
+Create test configuration for VPP+ILA. This should only need to be done once.
+THee are two configuration files used by vpp: init.conf and startup.conf.
+Both of these contain addresses that must be configured for the local
+network. There is a script for this. RUN:
+
+	cd $QDIR/../gw/vpp/ila_test
+	./make_test_conf <ens5_ip> <ens6_ip> <default_router> <db_host>
+
+ens5_ip and ens6_ip are the IPv6 addresses of ens5 and ens6. default_router
+is the default router for the network, and db_host is the address of the
+ILA-M (database server).
+
+This should create init.conf.test and startup.conf.test files in the ".."
+directory.
+
+Here is example output on my server:
+
+	./make_test_conf fd00:4888:2000:2062::122 fd00:4888:2000:2062::123 fd00:4888:2000:2062:524:23:0:2 fd00:4888:2000:1040::101
+
+** 4. On ILA-N:
+===============
+
+Bring VPP up. RUN:
+
+	cd $QDIR/../gw/vpp/ila_test
+	source ./start-vpp
+
+This should bring up VPP to a command prompt. It should also show the
+ILA addresses being configured (addresses with prefix of 2222::).
+
+
+Here is an example on my server:
+
+	% source ./start-vpp 
+	[sudo] password for tom2: 
+	vlib_plugin_early_init:359: plugin path ./build-root/install-vpp_debug-native/vpp/lib64/vpp_plugins/
+	load_one_plugin:187: Loaded plugin: acl_plugin.so (Access Control Lists)
+	load_one_plugin:187: Loaded plugin: avf_plugin.so (Intel Adaptive Virtual Function (AVF) Device Plugin)
+	load_one_plugin:189: Loaded plugin: cdp_plugin.so
+	load_one_plugin:106: Plugin disabled: dpdk_plugin.so
+	load_one_plugin:187: Loaded plugin: flowprobe_plugin.so (Flow per Packet)
+	load_one_plugin:187: Loaded plugin: gbp_plugin.so (Group Based Policy)
+	load_one_plugin:106: Plugin disabled: gtpu_plugin.so
+	load_one_plugin:189: Loaded plugin: gtpup_plugin.so
+	load_one_plugin:187: Loaded plugin: igmp_plugin.so (IGMP messaging)
+	load_one_plugin:187: Loaded plugin: ila_plugin.so (Identifier-locator addressing for IPv6)
+	load_one_plugin:187: Loaded plugin: ioam_plugin.so (Inbound OAM)
+	load_one_plugin:117: Plugin disabled (default): ixge_plugin.so
+	load_one_plugin:187: Loaded plugin: kubeproxy_plugin.so (kube-proxy data plane)
+	load_one_plugin:187: Loaded plugin: l2e_plugin.so (L2 Emulation)
+	load_one_plugin:187: Loaded plugin: lacp_plugin.so (Link Aggregation Control Protocol)
+	load_one_plugin:187: Loaded plugin: lb_plugin.so (Load Balancer)
+	load_one_plugin:187: Loaded plugin: memif_plugin.so (Packet Memory Interface (experimetal))
+	load_one_plugin:187: Loaded plugin: nat_plugin.so (Network Address Translation)
+	load_one_plugin:187: Loaded plugin: pppoe_plugin.so (PPPoE)
+	load_one_plugin:187: Loaded plugin: srv6ad_plugin.so (Dynamic SRv6 proxy)
+	load_one_plugin:187: Loaded plugin: srv6am_plugin.so (Masquerading SRv6 proxy)
+	load_one_plugin:187: Loaded plugin: srv6as_plugin.so (Static SRv6 proxy)
+	load_one_plugin:187: Loaded plugin: stn_plugin.so (VPP Steals the NIC for Container integration)
+	load_one_plugin:187: Loaded plugin: tlsmbedtls_plugin.so (mbedtls based TLS Engine)
+	load_one_plugin:187: Loaded plugin: tlsopenssl_plugin.so (openssl based TLS Engine)
+	clib_sysfs_prealloc_hugepages:239: pre-allocating 16 additional 2048K hugepages on numa node 0
+	EAL: Detected 4 lcore(s)
+	EAL: Multi-process socket /var/run/.rte_unix
+	EAL: Probing VFIO support...
+	EAL: VFIO support initialized
+	EAL: Started without hugepages support, physical addresses not available
+	EAL: WARNING: cpu flags constant_tsc=yes nonstop_tsc=no -> using unreliable clock cycles !
+	sx_server_main_init:253: PFCP: start_time: 0x7f5180388f80, 1525812957, 5af20edd.
+	gtp_ila_config:334: gtpila: Got parameter loc_id 121
+	gtp_ila_config:337: gtpila: Got paramter db_parms  host=fd00:4888:2000:1040::101,port=6380 
+	gtp_ila_config:340: gtpila: Got paramter test_addr 2222::1
+	gtp_ila_config:340: gtpila: Got paramter test_addr 2222::2
+	gtp_ila_config:340: gtpila: Got paramter test_addr 2222::3
+	gtp_ila_config:340: gtpila: Got paramter test_addr 2222::4
+	gtp_ila_config:340: gtpila: Got paramter test_addr 2222::5
+	start_db:113: gtpila: Started DB ident
+	    _______    _        _   _____  ___ 
+	 __/ __/ _ \  (_)__    | | / / _ \/ _ \
+	 _/ _// // / / / _ \   | |/ / ___/ ___/
+	 /_/ /____(_)_/\___/   |___/_/  /_/    
+
+	DBGvpp# host-ens5
+	host-ens6
+	tapcli-0
+	tapcli-1
+
+** 5. On ILA-R:
+===============
+
+At this point VPP should be running. The identifer and mapping database should
+be populated with entries. Here is output from my ILA-R:
+
+	% $QDIR/bin/ilac ident list
+	5 2222::5 121
+	3 2222::3 121
+	1 2222::1 121
+	2 2222::2 121
+	4 2222::4 121
+
+	% $QDIR/bin/ilac map list
+	2222::1 8888:0:0:121 * neutral-map-auto luid output
+	2222::4 8888:0:0:121 * neutral-map-auto luid output
+	2222::5 8888:0:0:121 * neutral-map-auto luid output
+	2222::2 8888:0:0:121 * neutral-map-auto luid output
+	2222::3 8888:0:0:121 * neutral-map-auto luid output
+
+** 6. On ILA-N:
+===============
+
+Configure tap addresses on the ILA-N. In a separate window that vpp is
+running, RUN:
+
+	cd $QDIR/../gw/vpp/ila_test
+	source ./after-start-vpp 
+
+** 6. On ILA-R
+==============
+
+At this point ILA and VPP should be configured. Sending traffic can now
+be attempted. RUN:
+
+%ping6 2222::1
+PING 2222::1(2222::1) 56 data bytes
+64 bytes from 2222::1: icmp_seq=530 ttl=62 time=1.74 ms
+64 bytes from 2222::1: icmp_seq=531 ttl=62 time=0.668 ms
+64 bytes from 2222::1: icmp_seq=532 ttl=62 time=0.527 ms
+64 bytes from 2222::1: icmp_seq=533 ttl=62 time=0.683 ms
+64 bytes from 2222::1: icmp_seq=534 ttl=62 time=0.561 ms
+
+
+** What if things don't work at first
+=====================================
+
+1. Check configuration. Make sure that addresses are configured on the
+   proper interfaces and that the addresses set in the test configuration
+   are correct.
+
+2. Try pinging the SIR address from within vpp ILA-N. Like:
+
+	DBGvpp# ping 2222::1
+	64 bytes from 2222::1: icmp_seq=1 ttl=64 time=.0466 ms
+	64 bytes from 2222::1: icmp_seq=2 ttl=64 time=.0547 ms
+	64 bytes from 2222::1: icmp_seq=3 ttl=64 time=.0351 ms
+	64 bytes from 2222::1: icmp_seq=4 ttl=64 time=.0372 ms
+	64 bytes from 2222::1: icmp_seq=5 ttl=64 time=.0397 ms
+
+   If ping doesn't respond then there is a problem with vpp address
+   configuration in init.conf.test
+
+3. Trying pinging from ILA-N command line. Like:
+
+	% ping6 2222::1
+	PING 2222::1(2222::1) 56 data bytes
+	64 bytes from 2222::1: icmp_seq=1 ttl=63 time=0.102 ms
+	64 bytes from 2222::1: icmp_seq=2 ttl=63 time=0.179 ms
+	64 bytes from 2222::1: icmp_seq=3 ttl=63 time=0.111 ms
+
+   If ping doesn't respond then there is like a routing issue between
+   the host and vpp. Check that there is a route in the host to
+   2222::/64 through through vpptap1 and make sure vpptap1 is configured
+   with address 2222::10/64.
+
+4. Run tcpdump on vpptap. Like:
+
+	% sudo tcpdump -ni vpptap1
+	tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+	listening on vpptap1, link-type EN10MB (Ethernet), capture size 262144 bytes
+	22:01:02.302011 IP6 fd00:4888:2000:2062::103 > 2222::1: ICMP6, echo request, seq 310, length 64
+	22:01:02.302101 IP6 2222::1 > fd00:4888:2000:2062::103: ICMP6, echo reply, seq 310, length 64
+	22:01:03.326074 IP6 fd00:4888:2000:2062::103 > 2222::1: ICMP6, echo request, seq 311, length 64
+	22:01:03.326230 IP6 2222::1 > fd00:4888:2000:2062::103: ICMP6, echo reply, seq 311, length 64
+
+  If there are no echo requests shown then packets are not bing routed to
+  vpp. If there are requests but no replies, then packets are being
+  dropped with vpp. If there are both requests and relpies, then packets
+  are being dropped outside of vv.
+
+5. Run tcpdump on ens4. This should show ICMP echo request packets with
+   and ILA address. SOmething like:
+
+	i% sudo tcpdump -ni ens4 host fd00:4888:2000:2062::103
+	tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+	listening on ens4, link-type EN10MB (Ethernet), capture size 262144 bytes
+	21:56:08.571932 IP6 fd00:4888:2000:2062::103 > 8888:0:0:121::9879: ICMP6, echo request, seq 23, length 64
+	21:56:09.595928 IP6 fd00:4888:2000:2062::103 > 8888:0:0:121::9879: ICMP6, echo request, seq 24, length 64
+
+   If the ICMP echo request packets are not present then they are not
+   reaching the host (or possibly coming from another interface).
+
+6. Run tcpdump on ens4. This should show ICMP echo reply packets with
+   and ILA address. Something like:
+
+
+	%sudo tcpdump -ni ens5 host fd00:4888:2000:2062::103
+	tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+	listening on ens5, link-type EN10MB (Ethernet), capture size 262144 bytes
+	21:58:08.349067 IP6 2222::1 > fd00:4888:2000:2062::103: ICMP6, echo reply, seq 140, length 64
+	21:58:09.372914 IP6 2222::1 > fd00:4888:2000:2062::103: ICMP6, echo reply, seq 141, length 64
+	21:58:10.396930 IP6 2222::1 > fd00:4888:200
+
+  If the ICMP echo replies are present, then the packets are being dropped
+  in the return path to the ILA-R. If the packets are not prosent then
+  there not making it to TX.
+

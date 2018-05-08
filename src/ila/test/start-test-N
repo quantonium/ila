@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Start ILA-N for simple test case. This starts up the ILA-N and configures
+# a SIR prefix, one locator and locator address ens4 is the assumed
+# interface.
+
+sudo sysctl -w net.ipv6.conf.all.forwarding=1
+
+sudo modprobe ila
+
+$QDIR/../ila/src/ila/test/test_setup-N 2222:0:0:0 \
+    8888:0:0:121 8888:0:0:121::121 ens4
+
