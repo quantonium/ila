@@ -32,5 +32,5 @@ Quickstart guide for ILA
 7) The next step is probably to bring up the ILA-GTP-VPP code and
    run the standalone test for that. Instructions to install, build,
    run VPP, and to run the standalone test (emulated calls) are in
-   https://github.com/quantonium/vpp/blob/feature/gtp-up/README.
+   https://raw.githubusercontent.com/quantonium/vpp/feature/gtp-up/README.vpp
 
