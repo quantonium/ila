@@ -1,0 +1,3 @@
+#!/bin/bash
+
+QDIR=$QDIR PYTHONPATH="$QDIR/lib:$CWD" python3 $QDIR/../ila/src/ila/test/ergw_addr.py "$@"
