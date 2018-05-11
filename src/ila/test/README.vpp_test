@@ -35,8 +35,8 @@ these interfaces are ens4, ens5, and ens6.
 
 The steps for running the test are:
 
-** Prequsisites
-===============
+** Prerequisites
+================
 
 Install ILA code per https://raw.githubusercontent.com/quantonium/ila/master/README.quickstart
 
@@ -78,8 +78,8 @@ Here is example output on my server:
 	rmmod: ERROR: Module ila is not currently loaded
 	Host ::1 port 6379
 
-After the commmand has run, the database server should running as well as
-ilactld (ILA-M) and ilad (ILA-R) damones. The databases can be inspected using
+After the command has run, the database server should running as well as
+ilactld (ILA-M) and ilad (ILA-R) daemons. The databases can be inspected using
 the ilac command (e.g. "$QDIR/bin/ilac loc list") and ps can be used to see
 ilad and ilactld processes.
 
@@ -106,7 +106,7 @@ The error "Module ila is not currently loaded" can be ignored
 ===============
 
 Create test configuration for VPP+ILA. This should only need to be done once.
-THee are two configuration files used by vpp: init.conf and startup.conf.
+There are two configuration files used by vpp: init.conf and startup.conf.
 Both of these contain addresses that must be configured for the local
 network. There is a script for this. RUN:
 
@@ -280,11 +280,11 @@ PING 2222::1(2222::1) 56 data bytes
 
   If there are no echo requests shown then packets are not bing routed to
   vpp. If there are requests but no replies, then packets are being
-  dropped with vpp. If there are both requests and relpies, then packets
+  dropped with vpp. If there are both requests and replies, then packets
   are being dropped outside of vv.
 
 5. Run tcpdump on ens4. This should show ICMP echo request packets with
-   and ILA address. SOmething like:
+   and ILA address. Something like:
 
 	i% sudo tcpdump -ni ens4 host fd00:4888:2000:2062::103
 	tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
@@ -307,6 +307,6 @@ PING 2222::1(2222::1) 56 data bytes
 	21:58:10.396930 IP6 2222::1 > fd00:4888:200
 
   If the ICMP echo replies are present, then the packets are being dropped
-  in the return path to the ILA-R. If the packets are not prosent then
+  in the return path to the ILA-R. If the packets are not present then
   there not making it to TX.
 

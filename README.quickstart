@@ -3,7 +3,7 @@ Quickstart guide for ILA
 
 1) It's recommended that you read the ILA README which is in
    https://github.com/quantonium/ila/blob/master/README and familiarize
-   yourself with ILA commands as well as ILA terminolgy and basic architecture
+   yourself with ILA commands as well as ILA terminology and basic architecture
 
 2) Ubunutu is recommended. README.install is a sourceable script on Ubuntu
 
@@ -14,10 +14,10 @@ Quickstart guide for ILA
 4) Instructions for installing ILA are in README.install. This can be
    sourced on Ubuntu by:
 
-   wget https://raw.githubusercontent.com/quantonium/ila/master/README.install \        -O /tmp/README.install
+   wget https://raw.githubusercontent.com/quantonium/ila/master/README.install -O /tmp/README.install
    source /tmp/README.install
 
-5) A basic test of ILA wth an emulated RAN network using network is described
+5) A basic test of ILA with an emulated RAN network using network is described
    in https://github.com/quantonium/ila/blob/master/src/ila/test/README. To
    run the test do:
 
