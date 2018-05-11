@@ -1,3 +1,9 @@
 #!/bin/bash
 
+if [ -z $QDIR ]; then
+	echo "Please set QDIR (like \"export QDIR=~/quantonium/install\")"
+	echo
+	exit 1
+fi
+
 sudo QDIR=$QDIR PYTHONPATH="$QDIR/lib:$CWD" python3 attach.py "$@"

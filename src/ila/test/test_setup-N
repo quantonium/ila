@@ -7,6 +7,12 @@
 # a list of SIR addresses to configure may be added beyond
 # the fourth argument.
 
+if [ -z $QDIR ]; then
+	echo "Please set QDIR (like \"export QDIR=~/quantonium/install\")"
+	echo
+	exit 1
+fi
+
 if [ "$#" -lt 4 ]; then
 	echo "Usage: test_setup-N <sir_prefix> <locator> <locator_addr> <device> [<SIR_address> ... ]"
 	exit 1

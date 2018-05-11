@@ -8,6 +8,12 @@
 # addresses to configure may be added beyond the fourth
 # argument.
 
+if [ -z $QDIR ]; then
+	echo "Please set QDIR (like \"export QDIR=~/quantonium/install\")"
+	echo
+	exit 1
+fi
+
 if [ "$#" -lt 4 ]; then
         echo "Usage: test_setup-R <default_via> <loc_addr> <loc_id> <device>"
         exit 1

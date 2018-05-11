@@ -1,5 +1,11 @@
 #!/bin/bash -E
 
+if [ -z $QDIR ]; then
+	echo "Please set QDIR (like \"export QDIR=~/quantonium/install\")"
+	echo
+	exit 1
+fi
+
 CWD=pwd
 
 sudo QDIR=$QDIR PYTHONPATH="$QDIR/lib:$CWD" python3 mnet_conf.py

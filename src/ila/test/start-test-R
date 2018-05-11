@@ -6,6 +6,12 @@
 # argument is the via for the ILA-N (either a default route or
 # its address on the link.
 
+if [ -z $QDIR ]; then
+	echo "Please set QDIR (like \"export QDIR=~/quantonium/install\")"
+	echo
+	exit 1
+fi
+
 if [ "$#" -ne 1 ]; then
         echo "Usage: start_test-R <ila-n-addr>"
         exit 1

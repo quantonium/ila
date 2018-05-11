@@ -4,6 +4,12 @@
 # a SIR prefix, one locator and locator address ens4 is the assumed
 # interface.
 
+if [ -z $QDIR ]; then
+	echo "Please set QDIR (like \"export QDIR=~/quantonium/install\")"
+	echo
+	exit 1
+fi
+
 sudo sysctl -w net.ipv6.conf.all.forwarding=1
 
 sudo modprobe ila
