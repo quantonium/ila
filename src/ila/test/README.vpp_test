@@ -86,7 +86,7 @@ ilad and ilactld processes.
 ** 2. On ILA-N:
 ===============
 
-Start the ILA-R with test configuration. RUN:
+Start the ILA-N with test configuration. RUN:
 
 	cd $QDIR/../ila/src/ila/test
 	./start-test-N
