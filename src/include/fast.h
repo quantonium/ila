@@ -1,7 +1,7 @@
 /*
- * qutils.h - Quantonium utilities library
+ * fast.h - definitions for Firewall and Service Tickets agent
  *
- * Copyright (c) 2018, Quantonium Inc. All rights reserved.
+ * Copyright (c) 2019, Quantonium Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,42 +27,34 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __QUTILS_H__
-#define __QUTILS_H__
+#ifndef __FAST_H__
+#define __FAST_H__
 
-#include <netinet/in.h>
-#include <linux/ipv6.h>
-#include <stdio.h>
-#include <sys/socket.h>
-#include <time.h>
+#include <stdbool.h>
 
-int daemonize(FILE *logfile);
-int get_address_from_name(char *name, int socktype, struct in6_addr *in6);
+struct fast_ila {
+	__u8 opt_type;
+	__u8 opt_len;
+	__u8 fast_type;
+	__u8 rsvd;
+	__u16 rsvd2;
+	__u32 expiration;
+	__u32 service_profile;
+	__u64 locator;
+} __attribute((packed));
 
-static inline void timespec_diff(struct timespec *start, struct timespec *stop,
-				 struct timespec *result)
+void *fast_init(void);
+size_t fast_query_verbose(struct in6_addr *in6, void *ctx, void *buf,
+			  size_t len, struct in6_addr *http_addr,
+			  int http_port, bool verbose);
+void fast_done(void *ctx);
+
+static inline size_t fast_query(struct in6_addr *in6, void *ctx, void *buf,
+				size_t len, struct in6_addr *http_addr,
+				int http_port)
 {
-	if ((stop->tv_nsec - start->tv_nsec) < 0) {
-		result->tv_sec = stop->tv_sec - start->tv_sec - 1;
-		result->tv_nsec = stop->tv_nsec - start->tv_nsec +
-		    1000000000;
-	} else {
-		result->tv_sec = stop->tv_sec - start->tv_sec;
-		result->tv_nsec = stop->tv_nsec - start->tv_nsec;
-	}
+	return fast_query_verbose(in6, ctx, buf, len, http_addr, http_port,
+				  false);
 }
 
-#define ipv6_optlen(p)	(((p)->hdrlen+1) << 3)
-
-int ipv6_opt_validate_tlvs(struct ipv6_opt_hdr *opt);
-int ipv6_opt_validate_single_tlv(unsigned char *tlv, size_t len);
-int ipv6_opt_tlv_find(struct ipv6_opt_hdr *opt, unsigned char *targ_tlv,
-		      unsigned int *start, unsigned int *end);
-struct ipv6_opt_hdr *ipv6_opt_tlv_insert(struct ipv6_opt_hdr *opt,
-					 unsigned char *tlv);
-struct ipv6_opt_hdr *ipv6_opt_tlv_delete(struct ipv6_opt_hdr *opt,
-					 unsigned char *tlv);
-void show_ipv6_tlvs(void);
-void set_ipv6_tlvs(void);
-
-#endif
+#endif /* __FAST_H__ */

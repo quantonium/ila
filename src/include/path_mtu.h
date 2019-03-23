@@ -1,7 +1,7 @@
 /*
- * qutils.h - Quantonium utilities library
+ * path_mtu.h - definitions for path MTU option
  *
- * Copyright (c) 2018, Quantonium Inc. All rights reserved.
+ * Copyright (c) 2019, Quantonium Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,42 +27,24 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __QUTILS_H__
-#define __QUTILS_H__
+#ifndef __PATH_MTU_H__
+#define __PATH_MTU_H__
 
-#include <netinet/in.h>
-#include <linux/ipv6.h>
-#include <stdio.h>
-#include <sys/socket.h>
-#include <time.h>
+#include <stdbool.h>
 
-int daemonize(FILE *logfile);
-int get_address_from_name(char *name, int socktype, struct in6_addr *in6);
-
-static inline void timespec_diff(struct timespec *start, struct timespec *stop,
-				 struct timespec *result)
-{
-	if ((stop->tv_nsec - start->tv_nsec) < 0) {
-		result->tv_sec = stop->tv_sec - start->tv_sec - 1;
-		result->tv_nsec = stop->tv_nsec - start->tv_nsec +
-		    1000000000;
-	} else {
-		result->tv_sec = stop->tv_sec - start->tv_sec;
-		result->tv_nsec = stop->tv_nsec - start->tv_nsec;
-	}
-}
-
-#define ipv6_optlen(p)	(((p)->hdrlen+1) << 3)
-
-int ipv6_opt_validate_tlvs(struct ipv6_opt_hdr *opt);
-int ipv6_opt_validate_single_tlv(unsigned char *tlv, size_t len);
-int ipv6_opt_tlv_find(struct ipv6_opt_hdr *opt, unsigned char *targ_tlv,
-		      unsigned int *start, unsigned int *end);
-struct ipv6_opt_hdr *ipv6_opt_tlv_insert(struct ipv6_opt_hdr *opt,
-					 unsigned char *tlv);
-struct ipv6_opt_hdr *ipv6_opt_tlv_delete(struct ipv6_opt_hdr *opt,
-					 unsigned char *tlv);
-void show_ipv6_tlvs(void);
-void set_ipv6_tlvs(void);
-
+struct path_mtu {
+	__u8 opt_type;
+	__u8 opt_len;
+	__u16 mtu_forward;
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	__u16 reflect : 1;
+	__u16 mtu_reflect : 15;
+#elif __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+	__u16 mtu_reflect : 15;
+	__u16 reflect : 1;
+#else
+	#error "Unknown __BYTE_ORDER__"
 #endif
+} __attribute((packed));
+
+#endif /* __PATH_MTU_H__ */

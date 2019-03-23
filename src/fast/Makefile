@@ -1,8 +1,6 @@
-include ../config.mk
-
 TOPTARGETS := all clean install
 
-SUBDIRS = iputil qutil qmodules fast
+SUBDIRS = ticket_agent tac
 
 $(TOPTARGETS) : $(SUBDIRS)
 

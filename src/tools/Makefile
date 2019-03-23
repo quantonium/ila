@@ -1,8 +1,6 @@
-include ../config.mk
-
 TOPTARGETS := all clean install
 
-SUBDIRS = iputil qutil qmodules fast
+SUBDIRS = udp_ping tcp_ping api_test
 
 $(TOPTARGETS) : $(SUBDIRS)
 

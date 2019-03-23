@@ -2,18 +2,22 @@ include ../../config.mk
 
 CFLAGS += -fPIC
 
-UTILOBJ = dbif_redis.o daemonize.o networking.o ipv6_tlvs.o
+UTILOBJ = fast_client.o
 
-TARGETS= libqutil.a
+TARGETS= libfast.so
 
 all: $(TARGETS)
 
-libqutil.a: $(UTILOBJ) $(ADDLIB)
+LDFLAGS += -lcurl
+
+libfast.a: $(UTILOBJ) $(ADDLIB)
 	$(QUIET_AR)$(AR) rcs $@ $^
+
+libfast.so: $(UTILOBJ) $(ADDLIB)
+	$(CC) -shared fast_client.o -o libfast.so
 
 install: $(TARGETS)
 	$(QUIET_INSTALL)$(INSTALL) -m 0755 $< $(INSTALLDIR)$(ILIBDIR)
-
 
 clean:
 	@rm -f $(UTILOBJ) $(ADDLIB) $(TARGETS)

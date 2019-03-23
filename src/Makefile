@@ -49,8 +49,9 @@ CFLAGS += -fPIC -g
 CFLAGS := $(WFLAGS) $(CCOPTS) -I$(CURRDIR)/include $(DEFINES) $(CFLAGS)
 YACCFLAGS = -d -t -v
 LDFLAGS += -L$(CURRDIR)/lib/iputil -L$(CURRDIR)/lib/qutil
+LDFLAGS += -L$(CURRDIR)/lib/fast
 
-SUBDIRS=lib ila
+SUBDIRS=lib ila fast tools
 
 #LIBNETLINK=../lib/libnetlink.a ../lib/libutil.a ../lib/libdbifredis.a
 

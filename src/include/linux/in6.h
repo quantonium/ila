@@ -285,6 +285,12 @@ struct in6_flowlabel_req {
 #define IPV6_UNICAST_IF         76
 #define IPV6_RECVFRAGSIZE	77
 
+/* API to set single Destination or Hop-by-Hop options */
+
+#define IPV6_HOPOPTS_TLV        79
+#define IPV6_RTHDRDSTOPTS_TLV   80
+#define IPV6_DSTOPTS_TLV        81
+
 /*
  * Multicast Routing:
  * see include/uapi/linux/mroute6.h.
@@ -293,4 +299,42 @@ struct in6_flowlabel_req {
  * ...
  * MRT6_MAX
  */
+
+/* NETLINK_GENERIC related info for IPv6 TLVs */
+
+#define IPV6_TLV_GENL_NAME	"ipv6-tlv"
+#define IPV6_TLV_GENL_VERSION	0x1
+
+enum {
+	IPV6_TLV_ATTR_ORDER,			/* binary with length 256 */
+	IPV6_TLV_ATTR_PERM,			/* binary with length 256 */
+
+	__IPV6_TLV_ATTR_MAX,
+};
+
+#define IPV6_TLV_ATTR_MAX		(__IPV6_TLV_ATTR_MAX - 1)
+
+enum {
+        IPV6_TLV_CMD_SET,
+	IPV6_TLV_CMD_GET,
+
+        __IPV6_TLV_CMD_MAX,
+};
+
+enum {
+	IPV6_TLV_PERM_NONE,
+	IPV6_TLV_PERM_ADMIN_CHECK,
+	IPV6_TLV_PERM_ADMIN,
+	IPV6_TLV_PERM_ANY_CHECK,
+	IPV6_TLV_PERM_ANY,
+	IPV6_TLV_PERM_MAX = IPV6_TLV_PERM_ANY
+};
+
+#define IPV6_TLV_CLASS_FLAG_HOPOPT      0x1
+#define IPV6_TLV_CLASS_FLAG_RTRDSTOPT   0x2
+#define IPV6_TLV_CLASS_FLAG_DSTOPT      0x4
+
+#define IPV6_TLV_CLASS_ANY_DSTOPT	(IPV6_TLV_CLASS_FLAG_RTRDSTOPT | \
+					 IPV6_TLV_CLASS_FLAG_DSTOPT)
+
 #endif /* _LINUX_IN6_H */
