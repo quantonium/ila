@@ -36,15 +36,9 @@ struct path_mtu {
 	__u8 opt_type;
 	__u8 opt_len;
 	__u16 mtu_forward;
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-	__u16 reflect : 1;
-	__u16 mtu_reflect : 15;
-#elif __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-	__u16 mtu_reflect : 15;
-	__u16 reflect : 1;
-#else
-	#error "Unknown __BYTE_ORDER__"
-#endif
+	__u16 mtu_reflect;
 } __attribute((packed));
+
+#define PATH_MTU_REFLECT 0x8000
 
 #endif /* __PATH_MTU_H__ */

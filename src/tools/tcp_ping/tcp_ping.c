@@ -13,12 +13,14 @@
 #include "fast.h"
 #include "utils.h"
 #include "qutils.h"
+#include "path_mtu.h"
  
 static bool verbose;
 int port = 7777;
 int fast_port = 6666;
 struct in6_addr fast_addr;
 bool lookup_fast;
+int do_num_opts;
 
 struct tcp_data {
 	__u32 length;
@@ -53,7 +55,33 @@ static void print_one(__u8 *ptr)
         }
 }
 
+static void print_one_path_mtu(__u8 *ptr)
+{
+	struct path_mtu *pm = (struct path_mtu *)ptr;
+	size_t len = ptr[1] + 2;
+
+	printf("Path MTU\n");
+	if (len == sizeof(struct path_mtu)) {
+		__u16 reflect_mtu;
+		bool reflect;
+
+		reflect_mtu = ntohs(pm->mtu_reflect);
+		reflect = !!(reflect_mtu & PATH_MTU_REFLECT);
+		reflect_mtu <<= 1;
+
+		printf("     Opt type: %u\n", pm->opt_type);
+		printf("     Opt len: %u\n", pm->opt_len);
+		printf("     Forward MTU: %u\n", ntohs(pm->mtu_forward));
+		printf("     Reflect: %s\n", reflect ? "yes" : "no");
+		printf("     Reflected MTU: %u\n", reflect_mtu);
+        } else {
+                printf("     Got unknown size %lu expected %lu\n",
+                       len, sizeof(struct path_mtu));
+        }
+}
+
 #define IPV6_TLV_FAST 222
+#define IPV6_TLV_PATH_MTU 0x3e
 
 static void parse_hopopt(__u8 *ptr)
 {
@@ -72,7 +100,12 @@ static void parse_hopopt(__u8 *ptr)
 			break;
 		case IPV6_TLV_FAST:
 			print_one(ptr);
-			/* Fall through */
+			optlen = ptr[1] + 2;
+			break;
+		case IPV6_TLV_PATH_MTU:
+			print_one_path_mtu(ptr);
+			optlen = ptr[1] + 2;
+			break;
 		default:
 			optlen = ptr[1] + 2;
 			break;
@@ -157,6 +190,7 @@ static void tcp_client(struct in6_addr *in6)
 	char cbuf2[10000];
 	void *fast_ctx = NULL;
 	int on = 1;
+	int i;
 
 	if (lookup_fast)
 		fast_ctx = fast_init();
@@ -227,6 +261,53 @@ static void tcp_client(struct in6_addr *in6)
 			msg.msg_control = NULL;
 			msg.msg_controllen = 0;
 		}
+	}
+
+	if (do_num_opts) {
+		struct ipv6_opt_hdr *ioh;
+		struct path_mtu *pm;
+		size_t len, ehlen;
+
+		len = sizeof(*ioh) + do_num_opts * sizeof(*pm);
+
+		if (len > sizeof(cbuf)) {
+			fprintf(stderr, "Too big\n");
+			exit(-1);
+		}
+
+		ehlen = (len - 1)/ 8;
+
+		len = (ehlen + 1) * 8;
+
+		msg.msg_control = cbuf;
+		msg.msg_controllen = sizeof(cbuf);
+
+		cmsg = CMSG_FIRSTHDR(&msg);
+		cmsg->cmsg_level = SOL_IPV6;
+		cmsg->cmsg_type = IPV6_HOPOPTS;
+		cmsg->cmsg_len = CMSG_LEN(len);
+
+		ioh = (struct ipv6_opt_hdr *)CMSG_DATA(cmsg);
+		ioh->nexthdr = 0;
+		ioh->hdrlen = ehlen;
+
+		pm = (struct path_mtu *)&ioh[1];
+
+		for (i = 0; i < do_num_opts; i++, pm++) {
+			pm->opt_type = IPV6_TLV_PATH_MTU;
+			pm->opt_len = sizeof(*pm) - 2;
+			pm->mtu_forward = htons(20000 + i);
+			pm->mtu_reflect = htons(PATH_MTU_REFLECT);
+		}
+
+		if (setsockopt(fd, IPPROTO_IPV6, IPV6_HOPOPTS_TLV,
+			       CMSG_DATA(cmsg) + 2, len - 2) < 0) {
+			perror("setsockopt IPV6_HOPOPTS");
+			exit(-1);
+		}
+
+		msg.msg_control = cbuf;
+		msg.msg_controllen = cmsg->cmsg_len;
 	}
 
 	memset(&msg2, 0, sizeof(msg2));
@@ -301,7 +382,7 @@ int main(int argc, char *argv[])
 	struct in6_addr in6;
 	int c;
 
-	while ((c = getopt(argc, argv, "s:vp:P:F:")) != -1) {
+	while ((c = getopt(argc, argv, "s:vp:P:F:M:")) != -1) {
 		switch (c) {
 		case 's':
 			psize = atoi(optarg);
@@ -323,6 +404,9 @@ int main(int argc, char *argv[])
 		case 'P':
 			fast_port = atoi(optarg);
 			set_fast_port = true;
+			break;
+		case 'M':
+			do_num_opts = atoi(optarg);
 			break;
 		default:
 			usage(argv[0]);

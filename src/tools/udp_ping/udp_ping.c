@@ -61,11 +61,18 @@ static void print_one_path_mtu(__u8 *ptr)
 
 	printf("Path MTU\n");
 	if (len == sizeof(struct path_mtu)) {
+		__u16 reflect_mtu;
+		bool reflect;
+
+		reflect_mtu = ntohs(pm->mtu_reflect);
+		reflect = !!(reflect_mtu & PATH_MTU_REFLECT);
+		reflect_mtu <<= 1;
+
 		printf("     Opt type: %u\n", pm->opt_type);
 		printf("     Opt len: %u\n", pm->opt_len);
 		printf("     Forward MTU: %u\n", ntohs(pm->mtu_forward));
-		printf("     Reflect: %s\n", pm->reflect ? "yes" : "no");
-		printf("     Reflected MTU: %u\n", ntohs(pm->mtu_reflect));
+		printf("     Reflect: %s\n", reflect ? "yes" : "no");
+		printf("     Reflected MTU: %u\n", reflect_mtu);
         } else {
                 printf("     Got unknown size %lu expected %lu\n",
                        len, sizeof(struct path_mtu));
@@ -244,8 +251,7 @@ static void udp_client(struct in6_addr *in6)
 			pm->opt_type = IPV6_TLV_PATH_MTU;
 			pm->opt_len = sizeof(*pm) - 2;
 			pm->mtu_forward = htons(20000 + i);
-			pm->reflect = 1;
-			pm->mtu_reflect = htons(0);
+			pm->mtu_reflect = htons(PATH_MTU_REFLECT);
 		}
 
 		msg.msg_control = cbuf;

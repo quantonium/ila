@@ -93,11 +93,23 @@ found_path_mtu:
 	pm = (struct path_mtu *)(CMSG_DATA(outcmsg) + 2);
 
 	if (len - 2 >= sizeof(struct path_mtu)) {
+		__u16 reflect_mtu;
+		__u16 forward_mtu;
+		bool reflect;
+
+		forward_mtu = ntohs(pm->mtu_forward);
+		reflect_mtu = ntohs(pm->mtu_reflect);
+		reflect = !!(reflect_mtu & PATH_MTU_REFLECT);
+		reflect_mtu <<= 1;
+
 		printf("     Opt type: %u\n", pm->opt_type);
 		printf("     Opt len: %u\n", pm->opt_len);
-		printf("     Forward MTU: %u\n", ntohs(pm->mtu_forward));
-		printf("     Reflect: %s\n", pm->reflect ? "yes" : "no");
-		printf("     Reflected MTU: %u\n", ntohs(pm->mtu_reflect));
+		printf("     Forward MTU: %u\n", forward_mtu);
+		printf("     Reflect: %s\n", reflect ? "yes" : "no");
+		printf("     Reflected MTU: %u\n", reflect_mtu);
+
+		pm->mtu_reflect = htons(forward_mtu >> 1);
+		pm->mtu_forward = htons(0);
 	} else {
 		printf("     Got unknown size %lu expected %lu\n",
 			len - 2, sizeof(struct path_mtu));
