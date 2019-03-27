@@ -1,0 +1,18 @@
+Experimental code for Path MTU HBH option. This used a UDP ping program
+that adds the MTU option at the client, reflects it at the server and
+reports the option as received.
+
+Usage (must be priveleged user to set HBH options):
+
+Server:
+
+    ./udp_ping_server
+
+Client:
+
+	export LD_LIBRARY_PATH="~/quantonium/ila/src/lib/fast"
+	./udp_ping [-v] [-M <num_opts> ] dest_addr
+
+
+   -v : Verbose output (print option data)
+   -M <num_opts>: Number of options to put in a packet
