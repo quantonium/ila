@@ -26,8 +26,15 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import time, os
+import time, os, sys
 import mobile_emul as em
+
+args = sys.argv
+
+loglevel = "INFO"
+
+if (len(args) > 1):
+	loglevel = args[1]
 
 em.delete_all_netns()
 
@@ -42,15 +49,25 @@ em.make_ran(1)
 for i in range(1, 11):
 	em.make_enb(i, 1)
 
+em.make_anchor(1, 1)
+
 em.make_gateway(1, 1)
 
 time.sleep(3)
 
 # Start ilads separately to avoid race conditions with Redis starting
-for i in range(1, 11):
-	em.start_enb_ilad(i)
+
+em.start_anchor_ilad(1, loglevel)
 
 em.start_gate_ilad(1)
+
+# ENBs that have forwarding cache
+for i in range(1, 6):
+	em.start_enb_ilad(i, "forwarder", 1, loglevel)
+
+# ENBs that don't cache or participate in AMRP
+for i in range(6, 11):
+	em.start_enb_ilad(i, "no-ilad", 0, loglevel)
 
 for i in range(1, 101):
 	em.make_ue(i, 1)
@@ -60,3 +77,7 @@ em.make_host(1, 1, 1)
 for i in range(1, 101):
 	em.attach_ue_to_enb(i, ((i - 1) // 10 + 1), 1)
 
+time.sleep(3)
+
+for i in range(1, 101):
+	em.set_one_ue_route(i)

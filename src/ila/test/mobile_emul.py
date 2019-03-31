@@ -126,6 +126,10 @@ def ns_set_via_route(ns, dest, via, dev):
 	exec_in_netns(ns, [tc.IPCMD, "route", "add", dest, "via", via,
 			  "dev", dev])
 
+def ns_set_via_route_src(ns, dest, via, dev, src):
+	exec_in_netns(ns, [tc.IPCMD, "route", "add", dest, "via", via,
+			  "dev", dev, "src", src])
+
 def ns_del_via_route(ns, dest, via, dev):
 	exec_in_netns(ns, [tc.IPCMD, "route", "del", dest, "via", via,
 			  "dev", dev])
@@ -158,9 +162,15 @@ def make_ue(number, ran_num):
 
 	ns_add_addr(ue_ns, ifnam0, ue_addr, 128)
 
-	ns_set_via_route(ue_ns, "default", tc.UE_ROUTE_ADDR1, ifnam0)
-
 	exec_in_netns(ran_ns, [tc.ILACCMD, "ident", "make", str(number), ue_addr])
+
+def set_one_ue_route(number):
+	ifnam0 = "veth0_ue%u" % number
+	ue_ns = "ue_%u" % number
+	suffix = make_addr_suffix(number)
+	ue_addr = "%s::%s" % (tc.SIR_PREFIX, suffix)
+
+	ns_set_via_route_src(ue_ns, "default", tc.UE_ROUTE_ADDR1, ifnam0, ue_addr)
 
 def start_gate_ilad(number):
 	print("Start gate ilad %u" % number)
@@ -170,9 +180,7 @@ def start_gate_ilad(number):
 	suffix = make_addr_suffix(number)
 	addr1 = tc.GW_ROUTE_ADDR1 % suffix
 
-	exec_in_netns(gw_ns, [tc.ILADCMD, "-d",
-			       "-D", "host=%s" % addr1,
-			       "-R", "via=%s,dev=%s" % (addr1, ifnam0)])
+	ns_set_via_route(gw_ns, tc.LOCATOR_ROUTE, addr1, ifnam0)
 
 def make_gateway(number, ran_num):
 	print("Make gateway %u" % number)
@@ -195,8 +203,8 @@ def make_gateway(number, ran_num):
 	link_set(ifnam1, ran_ns)
 
 	ns_add_addr(gw_ns, ifnam0, addr0, 64)
-	ns_set_blackhole_route(gw_ns, tc.SIR_PREFIX + "::/64")
 	ns_add_addr(ran_ns, ifnam1, addr1, 64)
+	ns_set_via_route(gw_ns, tc.SIR_PREFIX + "::/64", addr1, ifnam0)
 
 def make_host(number, gw_num, ran_num):
 	print("Make host %u" % number)
@@ -228,7 +236,7 @@ def make_host(number, gw_num, ran_num):
 
 	ns_set_via_route(ran_ns, addr0 + "/64", gaddr0, gifnam1)
 
-def start_enb_ilad(number):
+def start_enb_ilad(number, type, anchor_num, loglevel):
 	print("Start enb ilad %u" % number)
 
 	ifnam0 = "veth0_enb%u" % number
@@ -236,9 +244,38 @@ def start_enb_ilad(number):
 	suffix = make_addr_suffix(number)
 	addr1 = tc.ENB_ROUTE_ADDR1 % suffix
 
-	exec_in_netns(enb_ns, [tc.ILADCMD, "-d",
+	if (type == "router"):
+		exec_in_netns(enb_ns, [tc.ILADCMD, "-d", "-r",
 			       "-D", "host=%s" % addr1,
 			       "-R", "via=%s,dev=%s" % (addr1, ifnam0)])
+
+	elif (type == "forwarder"):
+		suffix = make_addr_suffix(anchor_num)
+		addr2 = tc.ANCHOR_ROUTE_ADDR0 % suffix
+		exec_in_netns(enb_ns, [tc.ILADCMD, "-d", "-f",
+			       "-L", "ilad_enb_%u" % number,
+			       "-l", loglevel,
+			       "-R", "via=%s,dev=%s" % (addr1, ifnam0),
+			       "-A", "router=%s" % addr2])
+		print("-d -f -R via=%s,dev=%s -A router=%s" %
+                    (addr1, ifnam0, addr2))
+
+def start_anchor_ilad(number, loglevel):
+	print("Start anchor ilad %u" % number)
+
+	ifnam0 = "veth0_anchor%u" % number
+	anchor_ns = "anchor_%u" % number
+	suffix = make_addr_suffix(number)
+	addr1 = tc.ANCHOR_ROUTE_ADDR1 % suffix
+
+	exec_in_netns(anchor_ns, [tc.ILADCMD, "-d",
+			       "-L", "ilad_anchor_%u" % number,
+			       "-l", loglevel,
+			       "-D", "host=%s" % addr1,
+			       "-R", "via=%s,dev=%s" % (addr1, ifnam0)])
+
+	exec_in_netns(anchor_ns, [tc.TCCMD, "qdisc", "add", "dev", ifnam0,
+			       "root", "netem", "delay", "10.0ms"])
 
 def make_enb(number, ran_num):
 	print("Make ENB %u" % number)
@@ -270,9 +307,34 @@ def make_enb(number, ran_num):
 
 	ns_set_ila_xlat(enb_ns, locator, tc.SIR_PREFIX)
 
-	ns_set_blackhole_route(enb_ns, tc.SIR_PREFIX + "::/64")
-
 	exec_in_netns(ran_ns, [tc.ILACCMD, "loc", "make", str(number), locator])
+
+def make_anchor(number, ran_num):
+	print("Make ANCHOR %u" % number)
+
+	ifnam0 = "veth0_anchor%u" % number
+	ifnam1 = "veth1_anchor%u" % number
+	anchor_ns = "anchor_%u" % number
+	ran_ns = "ran_%u" % ran_num
+	suffix = make_addr_suffix(number)
+	addr0 = tc.ANCHOR_ROUTE_ADDR0 % suffix
+	addr1 = tc.ANCHOR_ROUTE_ADDR1 % suffix
+
+	make_netns(anchor_ns)
+
+	ns_enable_forwarding(anchor_ns)
+
+	veth_add(ifnam0, ifnam1)
+
+	link_set(ifnam0, anchor_ns)
+	link_set(ifnam1, ran_ns)
+
+	ns_add_addr(anchor_ns, ifnam0, addr0, 64)
+	ns_add_addr(ran_ns, ifnam1, addr1, 64)
+
+	ns_set_via_route(ran_ns, tc.SIR_PREFIX + "::/64", addr0, ifnam1)
+
+	ns_set_via_route(anchor_ns, "default", addr1, ifnam0)
 
 def do_unattach_ue(ue_num, ran_num):
 	ifnam1 = "veth1_ue%u" % ue_num
@@ -321,6 +383,7 @@ def attach_ue_to_enb(ue_num, enb_num, ran_num):
 	enb_ns = "enb_%u" % enb_num
 	ran_ns = "ran_%u" % ran_num
 	suffix = make_addr_suffix(ue_num)
+	ue_addr = "%s::%s" % (tc.SIR_PREFIX, suffix)
 
 	link_set(ifnam1, enb_ns)
 
