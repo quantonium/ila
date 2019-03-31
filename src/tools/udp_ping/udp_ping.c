@@ -1,19 +1,20 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <time.h>
 #include <linux/types.h>
 #include <linux/ipv6.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <time.h>
+#include <unistd.h>
+
 #include "fast.h"
 #include "path_mtu.h"
-#include "utils.h"
 #include "qutils.h"
+#include "utils.h"
  
 static bool verbose;
 int port = 7777;
@@ -87,7 +88,6 @@ static void parse_hopopt(__u8 *ptr)
 	struct ipv6_hopopt_hdr *ioh = (struct ipv6_opt_hdr *)ptr;
 	size_t len, optlen;
 
-printf("Parse hop\n");
 	len = (ioh->hdrlen << 3) + 8;
 
 	ptr = (__u8 *)&ioh[1];
@@ -119,7 +119,6 @@ static void parse_cmsg(struct msghdr *msg)
 {
 	struct cmsghdr *cmsg;
 
-printf("Parse cmsp\n");
 	/* Receive auxiliary data in msg */
 	for (cmsg = CMSG_FIRSTHDR(msg); cmsg != NULL;
 	     cmsg = CMSG_NXTHDR(msg, cmsg)) {
@@ -136,23 +135,22 @@ printf("Parse cmsp\n");
 
 static void udp_client(struct in6_addr *in6)
 {
-	struct sockaddr_in6 sin6;
-	int fd;
-	ssize_t n, n1;
-	socklen_t alen;
-	char buf[10000];
-	char buf2[10000];
-	struct udp_data *ud2, *ud = (struct udp_data *)buf;
 	struct timespec ctime, dtime;
-	unsigned int seqno = 0;
-	struct msghdr msg, msg2;
 	struct iovec iov[1], iov2[1];
-	struct cmsghdr *cmsg;
-	char cbuf[10000];
-	char cbuf2[10000];
+	struct sockaddr_in6 sin6;
+	struct msghdr msg, msg2;
+	unsigned int seqno = 0;
 	void *fast_ctx = NULL;
+	struct cmsghdr *cmsg;
+	char cbuf2[10000];
+	char cbuf[10000];
+	char buf2[10000];
+	char buf[10000];
+	struct udp_data *ud2, *ud = (struct udp_data *)buf;
+	socklen_t alen;
+	ssize_t n, n1;
 	int on = 1;
-	int i;
+	int i, fd;
 
 	if (lookup_fast)
 		fast_ctx = fast_init();
@@ -187,75 +185,78 @@ static void udp_client(struct in6_addr *in6)
 	iov[0].iov_base = buf;
 	iov[0].iov_len = psize;
 
-	if (fast_ctx) {
-		size_t len;
+	if (fast_ctx || do_num_opts) {
+		struct ipv6_opt_hdr *ioh;
+		size_t len = 0, rlen;
+		void *data;
 
 		msg.msg_control = cbuf;
 		msg.msg_controllen = sizeof(cbuf);
-		len = sizeof(cbuf);
-
 		cmsg = CMSG_FIRSTHDR(&msg);
 		cmsg->cmsg_level = SOL_IPV6;
 		cmsg->cmsg_type = IPV6_HOPOPTS;
-		cmsg->cmsg_len = CMSG_LEN(len);
+		cmsg->cmsg_len = CMSG_LEN(sizeof(cbuf));
 
-		alen = sizeof(sin6);
-		if (getsockname(fd, (struct sockaddr *) &sin6, &alen) < 0) {
-			perror("getsockname");
-			exit(-1);
+		ioh = (struct ipv6_opt_hdr *)CMSG_DATA(cmsg);
+		data = &ioh[1];
+		len = 2;
+
+		if (fast_ctx) {
+			alen = sizeof(sin6);
+			if (getsockname(fd, (struct sockaddr *)&sin6,
+					&alen) < 0) {
+				perror("getsockname");
+				exit(-1);
+			}
+
+			rlen = fast_query_verbose(&sin6.sin6_addr, fast_ctx,
+						  data, sizeof(cbuf) - len,
+						  &fast_addr,
+						  fast_port, verbose);
+			len += rlen;
+			data += rlen;
 		}
 
-		len = fast_query_verbose(&sin6.sin6_addr, fast_ctx,
-					 CMSG_DATA(cmsg), len,
-					 &fast_addr, fast_port, verbose);
-		if (len) {
+		if (do_num_opts) {
+			struct path_mtu *pm;
+
+			rlen = do_num_opts * sizeof(*pm);
+
+			if (rlen > sizeof(cbuf) - len) {
+				fprintf(stderr, "Too big\n");
+				exit(-1);
+			}
+
+
+			pm = data;
+
+			for (i = 0; i < do_num_opts; i++, pm++) {
+				pm->opt_type = IPV6_TLV_PATH_MTU;
+				pm->opt_len = sizeof(*pm) - 2;
+				pm->mtu_forward = htons(20000 + i);
+				pm->mtu_reflect = htons(PATH_MTU_REFLECT);
+			}
+			len += rlen;
+			data += rlen;
+		}
+
+		if (len > 2) {
+			size_t ehlen;
+
+			ehlen = (len - 1)/ 8;
+			rlen = (ehlen + 1) * 8;
+
+			for (i = len; i < rlen; i++)
+				((__u8 *)data)[i] = 0;
+
+			ioh->nexthdr = 0;
+			ioh->hdrlen = ehlen;
 			msg.msg_control = cbuf;
 			msg.msg_controllen = cmsg->cmsg_len;
 		} else {
 			msg.msg_control = NULL;
 			msg.msg_controllen = 0;
 		}
-	}
-
-	if (do_num_opts) {
-        	struct ipv6_opt_hdr *ioh;
-		struct path_mtu *pm;
-		size_t len, ehlen;
-
-		len = sizeof(*ioh) + do_num_opts * sizeof(*pm);
-
-		if (len > sizeof(cbuf)) {
-			fprintf(stderr, "Too big\n");
-			exit(-1);
-		}
-
-		ehlen = (len - 1)/ 8;
-
-		len = (ehlen + 1) * 8;
-
-		msg.msg_control = cbuf;
-		msg.msg_controllen = sizeof(cbuf);
-
-		cmsg = CMSG_FIRSTHDR(&msg);
-		cmsg->cmsg_level = SOL_IPV6;
-		cmsg->cmsg_type = IPV6_HOPOPTS;
-		cmsg->cmsg_len = CMSG_LEN(len);
-
-		ioh = (struct ipv6_opt_hdr *)CMSG_DATA(cmsg);
-		ioh->nexthdr = 0;
-		ioh->hdrlen = ehlen;
-
-		pm = (struct path_mtu *)&ioh[1];
-
-		for (i = 0; i < do_num_opts; i++, pm++) {
-			pm->opt_type = IPV6_TLV_PATH_MTU;
-			pm->opt_len = sizeof(*pm) - 2;
-			pm->mtu_forward = htons(20000 + i);
-			pm->mtu_reflect = htons(PATH_MTU_REFLECT);
-		}
-
-		msg.msg_control = cbuf;
-		msg.msg_controllen = cmsg->cmsg_len;
 	}
 
 	memset(&msg2, 0, sizeof(msg2));
@@ -354,7 +355,6 @@ int main(int argc, char *argv[])
 			break;
 		case 'M':
 			do_num_opts = atoi(optarg);
-printf("NUMOP\n");
 			break;
 		default:
 			usage(argv[0]);

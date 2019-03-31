@@ -1,32 +1,20 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <unistd.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <linux/ipv6.h>
-#include <syslog.h>
 #include <getopt.h>
+#include <linux/ipv6.h>
+#include <netdb.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <syslog.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
  
+#include "fast.h"
 #include "qutils.h"
 #include "path_mtu.h"
-
-struct fast_ila {
-	__u8 nextproto;;
-	__u8 len;
-	__u8 opt_type;
-	__u8 opt_len;
-	__u8 fast_type;
-	__u8 rsvd;
-	__u16 rsvd2;
-	__u32 expiration;
-	__u32 service_profile;
-	__u64 locator;
-} __attribute((packed));
 
 bool do_daemonize;
 char *logname = "udp_ping_server";
@@ -39,107 +27,144 @@ int port = 7777;
 
 static size_t parse_cmsg(struct msghdr *msg, struct msghdr *outmsg)
 {
-	struct cmsghdr *cmsg, *outcmsg;
-	struct fast_ila *fi;
-	struct path_mtu *pm;
-	size_t len;
+	struct cmsghdr *outcmsg = CMSG_FIRSTHDR(outmsg);
+	void *outdata = CMSG_DATA(outcmsg);
+	struct ipv6_opt_hdr *ioh;
+	struct cmsghdr *cmsg;
+	size_t len, optlen;
+	size_t outlen = 0;
+	__u8 *ptr;
 
 	/* Receive auxiliary data in msg */
 	for (cmsg = CMSG_FIRSTHDR(msg); cmsg != NULL;
 	    cmsg = CMSG_NXTHDR(msg, cmsg)) {
-		if (cmsg->cmsg_level == SOL_IPV6 &&
-		    cmsg->cmsg_type == IPV6_HOPOPTS) {
-			switch (CMSG_DATA(cmsg)[2]) {
-			case IPV6_TLV_FAST:
-				fi = (struct fast_ila *)CMSG_DATA(cmsg);
-				if ((fi->fast_type >> 4) == 1)
-					goto found;
+		if (cmsg->cmsg_level != SOL_IPV6 ||
+		    cmsg->cmsg_type != IPV6_HOPOPTS)
+			continue;
+
+		/* Processed received HBH EH */
+		ioh = (struct ipv6_opt_hdr *)CMSG_DATA(cmsg);
+
+		len = (ioh->hdrlen << 3) + 8;
+
+		ptr = (__u8 *)&ioh[1];
+		len -= sizeof(*ioh);
+
+		/* Set up sending EH */
+		ioh = outdata;
+		outlen += sizeof(*ioh);
+		outdata += sizeof(*ioh);
+
+		/* Parse HBH TLVs */
+		while (len > 0) {
+			switch (*ptr) {
+			case IPV6_TLV_PAD1:
+				optlen = 1;
 				break;
-			case IPV6_TLV_PATH_MTU:
-				pm = (struct path_mtu *)CMSG_DATA(cmsg);
-				goto found_path_mtu;
-			default:
+			case IPV6_TLV_FAST: {
+				struct fast_ila *fi;
+
+				optlen = ptr[1] + 2;
+				if (optlen < sizeof(*fi))
+					break;
+
+				fi = (struct fast_ila *)ptr;
+				if ((fi->fast_type >> 4) != 1)
+					break;
+
+				memcpy(outdata, fi, optlen);
+				fi = (struct fast_ila *)outdata;
+				fi->fast_type = (2 << 4);
+				outdata += optlen;
+				outlen += optlen;
+
 				break;
 			}
+			case IPV6_TLV_PATH_MTU:
+			{
+				struct path_mtu *pm;
+				__u16 reflect_mtu;
+				__u16 forward_mtu;
+				bool reflect;
+
+				optlen = ptr[1] + 2;
+				if (optlen < sizeof(*pm))
+					break;
+
+				pm = (struct path_mtu *)ptr;
+
+				forward_mtu = ntohs(pm->mtu_forward);
+				reflect_mtu = ntohs(pm->mtu_reflect);
+				reflect = !!(reflect_mtu & PATH_MTU_REFLECT);
+
+				if (!reflect)
+					break;
+
+				memcpy(outdata, ptr, optlen);
+				pm = (struct path_mtu *)outdata;
+
+				pm->mtu_reflect = htons(forward_mtu >> 1);
+				pm->mtu_forward = htons(0);
+
+				outdata += optlen;
+				outlen += optlen;
+
+				break;
+			}
+			default:
+				optlen = ptr[1] + 2;
+				break;
+			}
+			ptr += optlen;
+			len -= optlen;
 		}
 	}
 
+	if (outlen > 2) {
+		int i;
+		size_t rlen, ehlen;
+
+		/* Have something to send */
+
+		ehlen = (outlen - 1) / 8;
+		rlen = (ehlen + 1) * 8;
+
+		/* Pad TLV */
+		for (i = outlen; i < rlen; i++)
+			((__u8 *)outdata)[i] = 0;
+
+		ioh->nexthdr = 0;
+		ioh->hdrlen = ehlen;
+
+		outcmsg->cmsg_level = SOL_IPV6;
+		outcmsg->cmsg_type = IPV6_HOPOPTS;
+		outcmsg->cmsg_len = CMSG_LEN(rlen);
+
+		return outcmsg->cmsg_len;
+	}
+
 	return 0;
-
-found:
-	len = (fi->len + 1) << 3;
-
-	outcmsg = CMSG_FIRSTHDR(outmsg);
-	outcmsg->cmsg_level = SOL_IPV6;
-	outcmsg->cmsg_type = IPV6_HOPOPTS;
-	outcmsg->cmsg_len = CMSG_LEN(len);
-
-	memcpy(CMSG_DATA(outcmsg), fi, len);
-
-	fi = (struct fast_ila *)CMSG_DATA(outcmsg);
-	fi->fast_type = (2 << 4);
-
-	return outcmsg->cmsg_len;
-found_path_mtu:
-	len = (pm->opt_len + 1) << 3;
-
-	outcmsg = CMSG_FIRSTHDR(outmsg);
-	outcmsg->cmsg_level = SOL_IPV6;
-	outcmsg->cmsg_type = IPV6_HOPOPTS;
-	outcmsg->cmsg_len = CMSG_LEN(len);
-
-	memcpy(CMSG_DATA(outcmsg), pm, len);
-
-	pm = (struct path_mtu *)(CMSG_DATA(outcmsg) + 2);
-
-	if (len - 2 >= sizeof(struct path_mtu)) {
-		__u16 reflect_mtu;
-		__u16 forward_mtu;
-		bool reflect;
-
-		forward_mtu = ntohs(pm->mtu_forward);
-		reflect_mtu = ntohs(pm->mtu_reflect);
-		reflect = !!(reflect_mtu & PATH_MTU_REFLECT);
-		reflect_mtu <<= 1;
-
-		printf("     Opt type: %u\n", pm->opt_type);
-		printf("     Opt len: %u\n", pm->opt_len);
-		printf("     Forward MTU: %u\n", forward_mtu);
-		printf("     Reflect: %s\n", reflect ? "yes" : "no");
-		printf("     Reflected MTU: %u\n", reflect_mtu);
-
-		pm->mtu_reflect = htons(forward_mtu >> 1);
-		pm->mtu_forward = htons(0);
-	} else {
-		printf("     Got unknown size %lu expected %lu\n",
-			len - 2, sizeof(struct path_mtu));
-        }
-
-	return outcmsg->cmsg_len;
 }
 
 static void udp_server(void)
 {
+	char cbuf[10000], cbuf2[10000];
 	struct sockaddr_in6 servaddr;
 	struct sockaddr_in6 cliaddr;
-	int fd;
-	ssize_t n, n1;
-	socklen_t alen;
-	char buf[10000];
 	struct msghdr msg, msg2;
 	struct iovec iov[1];
-	char cbuf[10000], cbuf2[10000];
+	char buf[10000];
+	ssize_t n, n1;
 	int on = 1;
+	int fd;
  
-	printf("Begin\n");
-
 	fd = socket(AF_INET6, SOCK_DGRAM, 0);
 	if (fd < 0) {
 		perror("socket");
 		exit(-1);
 	}
  
-	bzero(&servaddr, sizeof(servaddr));
+	memset(&servaddr, 0, sizeof(servaddr));
  
 	servaddr.sin6_family = AF_INET6;
 	servaddr.sin6_addr = in6addr_any;
@@ -176,7 +201,7 @@ static void udp_server(void)
 
 		inet_ntop(AF_INET6, &cliaddr.sin6_addr, abuf, sizeof(abuf));
 
-		printf("Received from %u, %d %s:%u\n", cliaddr.sin6_family, alen, abuf, ntohs(cliaddr.sin6_port));
+		printf("Received from %s:%u\n", abuf, ntohs(cliaddr.sin6_port));
 
 		iov[0].iov_base = buf;
 		iov[0].iov_len = n;
@@ -190,9 +215,9 @@ static void udp_server(void)
 
 		if (msg.msg_controllen) {
 			msg2.msg_controllen = parse_cmsg(&msg, &msg2);
-		} else
+		} else {
 			msg2.msg_controllen = 0;
-
+		}
 
 		n1 = sendmsg(fd, &msg2, 0);
 		if (n1 < 0) {
