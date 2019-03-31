@@ -1,6 +1,6 @@
 TOPTARGETS := all clean install
 
-SUBDIRS = ilad ilactld ilac ilactl redis
+SUBDIRS = ilad ilactld ilac ilactl redis amc
 
 $(TOPTARGETS) : $(SUBDIRS)
 

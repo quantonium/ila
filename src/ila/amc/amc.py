@@ -1,4 +1,4 @@
-# test_conf.py - test configuration
+# amc.py - Address mapping AMPF management interface program
 #
 # Copyright (c) 2018, Quantonium Inc. All rights reserved.
 #
@@ -26,41 +26,49 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import os
+import sys, getopt, redis, struct, socket, amfp, qutils
+from collections import namedtuple
 
-QDIR= os.environ['QDIR']
+def usage_err(errstr):
+	if (errstr != ""):
+		print(errstr)
+		print("")
 
-BIN=QDIR + "/bin"
-SBIN=QDIR + "/sbin"
+	print("Usage:")
+	print("    amc [-h host] [-p port] get IDENT")
+	print("")
+	print("IDENT = iid | luid | virt-v4 | virt-uni-v6 |")
+	print("        virt-multi-v6 | monlocal-addr | use-format")
 
-IPCMD= SBIN + "/ip"
-IFCONFIGCMD="ifconfig"
-SYSCTLCMD="sysctl"
-MODPROBECMD="modprobe"
-KILLALLCMD="killall"
-TCCMD="tc"
+	sys.exit(2)
 
-ILADIR= BIN
-ILACCMD=ILADIR + "/ilac"
-ILACTLDCMD=ILADIR + "/ilactld"
-ILADCMD=ILADIR + "/ilad"
-AMCCMD=ILADIR + "/amc"
+try:
+	mypopts, args = getopt.getopt(sys.argv[1:], "h:p:")
+except getopt.GetoptError as e:
+	usage_err(str(e))
+	sys.exit(2)
 
-REDISDIR=QDIR + "/bin"
-REDISBIN=REDISDIR + "/redis-server"
-REDISCONF= QDIR + "/etc/redis_%s.conf"
+try:
+	port_set = False
+	host = "::1"
+	port = 5555
 
-UE_ROUTE_ADDR0="1111::8000:0:0:0"
-UE_ROUTE_ADDR1="1111::8000:0:0:1"
-ENB_ROUTE_ADDR0="1112:%s::8000:0:0:0"
-ENB_ROUTE_ADDR1="1112:%s::8000:0:0:1"
-HOST_ROUTE_ADDR0="1113:%s::8000:0:0:0"
-HOST_ROUTE_ADDR1="1113:%s::8000:0:0:1"
-GW_ROUTE_ADDR0="1114:%s::8000:0:0:0"
-GW_ROUTE_ADDR1="1114:%s::8000:0:0:1"
-ANCHOR_ROUTE_ADDR0="1115:%s::8000:0:0:0"
-ANCHOR_ROUTE_ADDR1="1115:%s::8000:0:0:1"
-LOCATOR="2017:%s"
-LOCATOR_ROUTE="2017::/16"
-SIR_PREFIX="3333:0:0:0"
+	for o, a in mypopts:
+		if o == '-h':
+			host = a
+		elif o == '-p':
+			port = a
+			port_set = True
 
+	if len(args) < 1:
+		usage_err("Need at least two arguments")
+		sys.exit(2)
+
+	cmd = args[0];
+	args = args[1:]
+
+	amfp.amfp_process_get_map_entry(host, int(port), cmd, args)
+
+except socket.error as e:
+	print("Socket error:%s", str(e))
+	sys.exit(2)
