@@ -29,7 +29,7 @@
 class QutilsError(Exception):
 	pass
 
-import struct, socket
+import struct, socket, os, sys
 
 # Addr64 number to string
 def addr64_n2a(addr):
@@ -80,3 +80,38 @@ def parse_address(str):
 def quads2ip(addr1, addr2):
 	return socket.inet_ntop(socket.AF_INET6,
 	    struct.pack("QQ", addr1, addr2))
+
+def daemonize():
+	"""
+	do the UNIX double-fork magic, see Stevens' "Advanced
+	Programming in the UNIX Environment" for details (ISBN 0201563177)
+	http://www.erlenstar.demon.co.uk/unix/faq_2.html#SEC16
+	"""
+	try:
+		pid = os.fork()
+		if pid > 0:
+			# exit first parent
+			sys.exit(0)
+	except OSError as e:
+		sys.stderr.write("fork #1 failed: %d (%s)\n" % (e.errno, e.strerror))
+		sys.exit(1)
+
+	# decouple from parent environment
+	os.chdir("/")
+	os.setsid()
+	os.umask(0)
+
+	# do second fork
+	try:
+		pid = os.fork()
+		if pid > 0:
+			# exit from second parent
+			sys.exit(0)
+	except OSError as e:
+		sys.stderr.write("fork #2 failed: %d (%s)\n" % (e.errno, e.strerror))
+		sys.exit(1)
+
+	# close standard file descriptors
+	sys.stdin.close()
+	sys.stdout.close()
+	sys.stderr.close()
