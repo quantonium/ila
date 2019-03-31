@@ -98,7 +98,6 @@ static void print_one(__u8 *ptr)
 static size_t function_pt(void *indata, size_t size, size_t nmemb, void *data)
 {
 	struct query_data *qd = data;
-	struct ipv6_hopopt_hdr *ioh;
 	size_t len, optlen;
 	__u8 *ptr = indata;
 	int i;
@@ -117,17 +116,6 @@ static size_t function_pt(void *indata, size_t size, size_t nmemb, void *data)
 		printf("%02x ", ptr[i]);
 
 	printf("\n");
-
-	ioh = indata;
-
-	if (len != (ioh->hdrlen << 3) + 8) {
-		fprintf(stderr, "Unexpected length, got %lu want %d\n",
-			len, (ioh->hdrlen << 3) + 8);
-		return size;
-	}
-
-	ptr = (__u8 *)&ioh[1];
-        len -= sizeof(*ioh);
 
 	while (len > 0) {
 		switch (*ptr) {
