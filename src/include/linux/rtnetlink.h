@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 #ifndef __LINUX_RTNETLINK_H
 #define __LINUX_RTNETLINK_H
 
@@ -149,6 +150,16 @@ enum {
 	RTM_NEWCACHEREPORT = 96,
 #define RTM_NEWCACHEREPORT RTM_NEWCACHEREPORT
 
+	RTM_NOTIFYROUTE = 98,
+#define RTM_NOTIFYROUTE RTM_NOTIFYROUTE
+
+	RTM_NEWCHAIN = 100,
+#define RTM_NEWCHAIN RTM_NEWCHAIN
+	RTM_DELCHAIN,
+#define RTM_DELCHAIN RTM_DELCHAIN
+	RTM_GETCHAIN,
+#define RTM_GETCHAIN RTM_GETCHAIN
+
 	__RTM_MAX,
 #define RTM_MAX		(((__RTM_MAX + 3) & ~3) - 1)
 };
@@ -253,6 +264,11 @@ enum {
 #define RTPROT_DHCP	16      /* DHCP client */
 #define RTPROT_MROUTED	17      /* Multicast daemon */
 #define RTPROT_BABEL	42      /* Babel daemon */
+#define RTPROT_BGP	186     /* BGP Routes */
+#define RTPROT_ISIS	187     /* ISIS Routes */
+#define RTPROT_OSPF	188     /* OSPF Routes */
+#define RTPROT_RIP	189     /* RIP Routes */
+#define RTPROT_EIGRP	192     /* EIGRP Routes */
 
 /* rtm_scope
 
@@ -326,6 +342,9 @@ enum rtattr_type_t {
 	RTA_PAD,
 	RTA_UID,
 	RTA_TTL_PROPAGATE,
+	RTA_IP_PROTO,
+	RTA_SPORT,
+	RTA_DPORT,
 	__RTA_MAX
 };
 
@@ -430,6 +449,8 @@ enum {
 #define RTAX_QUICKACK RTAX_QUICKACK
 	RTAX_CC_ALGO,
 #define RTAX_CC_ALGO RTAX_CC_ALGO
+	RTAX_FASTOPEN_NO_COOKIE,
+#define RTAX_FASTOPEN_NO_COOKIE RTAX_FASTOPEN_NO_COOKIE
 	__RTAX_MAX
 };
 
@@ -538,8 +559,18 @@ struct tcmsg {
 	int		tcm_ifindex;
 	__u32		tcm_handle;
 	__u32		tcm_parent;
+/* tcm_block_index is used instead of tcm_parent
+ * in case tcm_ifindex == TCM_IFINDEX_MAGIC_BLOCK
+ */
+#define tcm_block_index tcm_parent
 	__u32		tcm_info;
 };
+
+/* For manipulation of filters in shared block, tcm_ifindex is set to
+ * TCM_IFINDEX_MAGIC_BLOCK, and tcm_parent is aliased to tcm_block_index
+ * which is the block index.
+ */
+#define TCM_IFINDEX_MAGIC_BLOCK (0xFFFFFFFFU)
 
 enum {
 	TCA_UNSPEC,
@@ -554,6 +585,9 @@ enum {
 	TCA_PAD,
 	TCA_DUMP_INVISIBLE,
 	TCA_CHAIN,
+	TCA_HW_OFFLOAD,
+	TCA_INGRESS_BLOCK,
+	TCA_EGRESS_BLOCK,
 	__TCA_MAX
 };
 
@@ -642,7 +676,8 @@ enum rtnetlink_groups {
 #define RTNLGRP_DECnet_ROUTE	RTNLGRP_DECnet_ROUTE
 	RTNLGRP_DECnet_RULE,
 #define RTNLGRP_DECnet_RULE	RTNLGRP_DECnet_RULE
-	RTNLGRP_NOP4,
+	RTNLGRP_ROUTE_NOTIFY,
+#define RTNLGRP_ROUTE_NOTIFY	RTNLGRP_ROUTE_NOTIFY
 	RTNLGRP_IPV6_PREFIX,
 #define RTNLGRP_IPV6_PREFIX	RTNLGRP_IPV6_PREFIX
 	RTNLGRP_IPV6_RULE,
