@@ -1,4 +1,4 @@
-OBJ=ilad_main.o ila_kernel.o
+OBJ=ilad_main.o ila_kernel.o ilad_amfp.o
 
 include ../../config.mk
 

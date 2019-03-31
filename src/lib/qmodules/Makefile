@@ -1,6 +1,6 @@
 include ../../config.mk
 
-TARGETS= ila.py qutils.py common_conf.py utility.py
+TARGETS= amfp.py ila.py qutils.py common_conf.py utility.py
 
 all:
 

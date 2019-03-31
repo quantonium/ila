@@ -38,9 +38,11 @@
 #include <netdb.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 
 #include "ila.h"
@@ -54,10 +56,18 @@ struct ila_kernel_context {
 	FILE *logf;
 };
 
-#define IKPRINTF(ikc, format, ...) do {				\
-	if (ikc->logf)						\
-		fprintf(ikc->logf, format, ##__VA_ARGS__);	\
-} while (0)
+static inline void kern_log(int pri, struct ila_kernel_context *ikc,
+                            char *format, ...)
+{
+        char buffer[256];
+        va_list args;
+
+        va_start(args, format);
+        vsprintf(buffer, format, args);
+        va_end(args);
+
+        syslog(pri, "%s: %s", logname, buffer);
+}
 
 struct ila_route {
 	struct in6_addr addr;
@@ -105,7 +115,7 @@ static int ila_kernel_init(void **context, FILE *logf)
 	ikc = malloc(sizeof(*ikc));
 	if (!ikc) {
 		if (logf)
-			fprintf(stderr, "ila_kernel: Malloc context failed\n");
+			fprintf(logf, "ila_kernel: Malloc context failed\n");
 		return -1;
 	}
 
@@ -113,7 +123,8 @@ static int ila_kernel_init(void **context, FILE *logf)
 
 	if (rtnl_open(&rth, 0) < 0) {
 		free(ikc);
-		IKPRINTF(ikc, "ila_kernel: Cannot open ip rtnetlink: %s\n",
+		kern_log(LOG_ERR, ikc,
+			 "ila_kernel: Cannot open ip rtnetlink: %s\n",
 			 strerror(errno));
 		return -1;
 	}
@@ -122,7 +133,7 @@ static int ila_kernel_init(void **context, FILE *logf)
 		return -1;
 
 	if (genl_init_handle(&genl_rth, ILA_GENL_NAME, &genl_family)) {
-		IKPRINTF(ikc, "ila_kernel: Cannot init genl: %s\n",
+		kern_log(LOG_ERR, ikc, "ila_kernel: Cannot init genl: %s\n",
 			 strerror(errno));
 		return -1;
 	}
@@ -165,13 +176,15 @@ static int ila_kernel_parse_args(void *context, char *subopts)
 			break;
 		case OPT_LOCAL_LOCATOR:
 			if (get_addr64(&ikc->local_locator, value) < 0) {
-				IKPRINTF(ikc, "ila_kernel: Bad locator '%s'\n",
+				kern_log(LOG_ERR, ikc,
+					"ila_kernel: Bad locator arg '%s'\n",
 					 value);
 				return -1;
 			}
 			break;
 		default:
-			IKPRINTF(ikc, "ila_kernel: Bad ILA kernell opt '%s'\n",
+			kern_log(LOG_ERR, ikc,
+				 "ila_kernel: Bad ILA kernell opt '%s'\n",
 				 value);
 			return -1;
 		}
@@ -200,6 +213,9 @@ static int set_encap(struct ila_kernel_context *ikc, struct ila_route *irt,
 	rta_addattr8(rta, 1024, ILA_ATTR_CSUM_MODE, irt->csum_mode);
 	rta_addattr8(rta, 1024, ILA_ATTR_IDENT_TYPE, irt->ident_type);
 	rta_addattr8(rta, 1024, ILA_ATTR_HOOK_TYPE, irt->hook_type);
+
+	rta_addattr_l(rta, 1024, ILA_ATTR_NOTIFY_SRC, NULL, 0);
+	rta_addattr_l(rta, 1024, ILA_ATTR_NOTIFY_DST, NULL, 0);
 
 	rta_nest_end(rta, nest);
 
@@ -231,7 +247,8 @@ static int flush_cb(const struct sockaddr_nl *who,
 	req.n.nlmsg_seq = ++rth.seq;
 
 	if (rtnl_send_check(&rth, &req, n->nlmsg_len) < 0) {
-		IKPRINTF(ikc, "ila_kernel: Failed to send flush request: %s",
+		kern_log(LOG_ERR, ikc,
+			 "ila_kernel: Failed to send flush request: %s",
 			 strerror(errno));
 		return -2;
 	}
@@ -242,13 +259,14 @@ static int flush_cb(const struct sockaddr_nl *who,
 static int flush_kernel(struct ila_kernel_context *ikc)
 {
 	if (rtnl_wilddump_request(&rth, AF_INET6, RTM_GETROUTE) < 0) {
-		IKPRINTF(ikc, "ila_kernel: Failed to send dump request: %s",
+		kern_log(LOG_ERR, ikc,
+			 "ila_kernel: Failed to send dump request: %s",
 			 strerror(errno));
 		return -1;
 	}
 
 	if (rtnl_dump_filter(&rth, flush_cb, ikc) < 0) {
-		IKPRINTF(ikc, "ila_kernel: Dump filter exited %s",
+		kern_log(LOG_ERR, ikc, "ila_kernel: Dump filter exited %s",
 			 strerror(errno));
 		return -1;
 	}
@@ -308,7 +326,10 @@ static int modify_route_mapping(struct ila_kernel_context *ikc,
 	}
 
 	if (rtnl_talk(&rth, &req.n, NULL, 0) < 0) {
-		IKPRINTF(ikc, "ila_kernel: Talk to kernel failed: %s",
+		if (cmd == RTM_DELROUTE && errno == ESRCH)
+			return -2;
+
+		kern_log(LOG_ERR, ikc, "ila_kernel: Talk to kernel failed: %s",
 			 strerror(errno));
 
 		return -2;

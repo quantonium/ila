@@ -66,6 +66,28 @@ struct IlaLocValue {
 	Locator locator;
 };
 
+struct IlaAddress {
+	union {
+		struct in6_addr addr;
+		struct {
+			Locator loc;
+			Identifier ident;
+		};
+	};
+};
+
+/* Instance of a mapping system. */
+struct ila_map_sys {
+	struct dbif_ops *db_ops;
+	void *db_ctx;
+	struct ila_route_ops *route_ops;
+	void *route_ctx;
+	struct ila_amfp_ops *amfp_ops;
+	void *amfp_ctx;
+	void *watch_all_handle;
+	struct event_base *event_base;
+};
+
 /* ila_route_ops define an interface to set ILA routes (e.g.
  * setting kernel LWT routes).
  *
@@ -99,5 +121,48 @@ struct ila_route_ops {
 };
 
 struct ila_route_ops *ila_get_kernel(void);
+
+/* ila_amfp_ops interface into address mapping forwarder protocol
+ *
+ * Functions are:
+ *
+ *   init	Inititialize AMFP.
+ *
+ *   parse_args
+ *
+ *		Parse arguments specific to the backend AMFP
+ *		implementation. This are assumed to be a subopts string.
+ *		A logfile argument is used to log messages about
+ *		bad arguments.
+ *
+ *   start	Start AMFP.
+ *
+ *   done	Done with AMFP, any resources can be released.
+ *
+ */
+struct ila_amfp_ops {
+	int (*init)(void **context, struct ila_map_sys *ims, FILE *logf);
+	int (*parse_args)(void *context, char *subopts);
+	int (*start)(void *context);
+	void (*done)(void *context);
+};
+
+struct ila_amfp_ops *ila_get_router_amfp(void);
+struct ila_amfp_ops *ila_get_forwarder_amfp(void);
+
+extern char *logname;
+extern int loglevel;
+
+static inline void ilad_log(int pri, char *format, ...)
+{
+	char buffer[256];
+	va_list args;
+
+	va_start(args, format);
+	vsprintf(buffer, format, args);
+	va_end(args);
+
+	syslog(pri, "%s: %s", logname, buffer);
+}
 
 #endif
