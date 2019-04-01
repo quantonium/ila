@@ -37,7 +37,7 @@ from collections import namedtuple
 import http.client
 
 FastOpt = namedtuple('FastOpt', 'opt_type, opt_len, fast_type, \
-	    rsvd, expiration, service_profile, locator')
+	    rsvd, rsvd2, expiration, service_profile, locator')
 
 def usage_err(errstr):
 	if (errstr != ""):
@@ -50,14 +50,17 @@ def usage_err(errstr):
 	sys.exit(2)
 
 def get_tac_info(host, port, args):
-	print("RR %s:%u\n" % (host, port))
-	conn = http.client.HTTPConnection("%s:%u" %(host, port) )
-	conn.request("GET", "/?query=3333::22")
+	lookup = args[0]
+
+	print("TAC lookup %s:%u for %s\n" % (host, port, args[0]))
+
+	conn = http.client.HTTPConnection("%s:%u" % (host, port))
+	conn.request("GET", "/?query=%s" % lookup)
 	r1 = conn.getresponse()
 	print(r1.status, r1.reason)
 	data = r1.read()  # This will return entire content.
 
-	if (len(data) != 20):
+	if (len(data) != 22):
 		print("Got data length %u\n" % len(data))
 
 		for i in range(len(data)):
@@ -67,7 +70,7 @@ def get_tac_info(host, port, args):
 
 		return
 
-	opt_tuple = FastOpt._make(struct.unpack("<BBBBIIQ", data))
+	opt_tuple = FastOpt._make(struct.unpack("<BBBBHIIQ", data))
 
 	try:
 		loc = qutils.addr64_n2a(opt_tuple.locator)

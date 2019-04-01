@@ -1,4 +1,4 @@
-# test_conf.py - test configuration
+# tac_ns.py - run tac in a network name space
 #
 # Copyright (c) 2018, Quantonium Inc. All rights reserved.
 #
@@ -26,46 +26,24 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import os
+import sys, mobile_emul
+import test_conf as tc
 
-QDIR= os.environ['QDIR']
+def usage():
+	print("Usage: tac_ns NS { ARGS ... }")
 
-BIN=QDIR + "/bin"
-SBIN=QDIR + "/sbin"
+args = sys.argv
 
-IPCMD= SBIN + "/ip"
-IFCONFIGCMD="ifconfig"
-SYSCTLCMD="sysctl"
-MODPROBECMD="modprobe"
-KILLALLCMD="killall"
-TCCMD="tc"
+if (len(args) < 2):
+	usage()
+	sys.exit(2)
 
-ILADIR= BIN
-ILACCMD=ILADIR + "/ilac"
-ILACTLDCMD=ILADIR + "/ilactld"
-ILADCMD=ILADIR + "/ilad"
-AMCCMD=ILADIR + "/amc"
-TACCMD=ILADIR + "/tac"
+ns = args[1]
+args = [ tc.TACCMD ] + args[2:]
 
-UDPPINGSERVERCMD=BIN + "/udp_ping_server"
-TCPPINGSERVERCMD=BIN + "/tcp_ping_server"
+# Ignore all exceptions here
 
-FASTSERVERCMD=SBIN + "/fast_server"
-REDISDIR=QDIR + "/bin"
-REDISBIN=REDISDIR + "/redis-server"
-REDISCONF= QDIR + "/etc/redis_%s.conf"
-
-UE_ROUTE_ADDR0="1111::8000:0:0:0"
-UE_ROUTE_ADDR1="1111::8000:0:0:1"
-ENB_ROUTE_ADDR0="1112:%s::8000:0:0:0"
-ENB_ROUTE_ADDR1="1112:%s::8000:0:0:1"
-HOST_ROUTE_ADDR0="1113:%s::8000:0:0:0"
-HOST_ROUTE_ADDR1="1113:%s::8000:0:0:1"
-GW_ROUTE_ADDR0="1114:%s::8000:0:0:0"
-GW_ROUTE_ADDR1="1114:%s::8000:0:0:1"
-ANCHOR_ROUTE_ADDR0="1115:%s::8000:0:0:0"
-ANCHOR_ROUTE_ADDR1="1115:%s::8000:0:0:1"
-LOCATOR="2017:%s"
-LOCATOR_ROUTE="2017::/16"
-SIR_PREFIX="3333:0:0:0"
-
+try:
+	mobile_emul.exec_in_netns(ns, args)
+except:
+	pass
