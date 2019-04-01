@@ -164,6 +164,8 @@ def make_ue(number, ran_num):
 
 	exec_in_netns(ran_ns, [tc.ILACCMD, "ident", "make", str(number), ue_addr])
 
+	start_ping_servers(ue_ns)
+
 def set_one_ue_route(number):
 	ifnam0 = "veth0_ue%u" % number
 	ue_ns = "ue_%u" % number
@@ -206,6 +208,8 @@ def make_gateway(number, ran_num):
 	ns_add_addr(ran_ns, ifnam1, addr1, 64)
 	ns_set_via_route(gw_ns, tc.SIR_PREFIX + "::/64", addr1, ifnam0)
 
+	start_ping_servers(gw_ns)
+
 def make_host(number, gw_num, ran_num):
 	print("Make host %u" % number)
 
@@ -236,6 +240,8 @@ def make_host(number, gw_num, ran_num):
 
 	ns_set_via_route(ran_ns, addr0 + "/64", gaddr0, gifnam1)
 
+	start_ping_servers(host_ns)
+
 def start_enb_ilad(number, type, anchor_num, loglevel):
 	print("Start enb ilad %u" % number)
 
@@ -259,6 +265,16 @@ def start_enb_ilad(number, type, anchor_num, loglevel):
 			       "-A", "router=%s" % addr2])
 		print("-d -f -R via=%s,dev=%s -A router=%s" %
                     (addr1, ifnam0, addr2))
+
+def start_udp_ping_server(ns):
+	exec_in_netns(ns, [tc.UDPPINGSERVERCMD, "-d"])
+
+def start_tcp_ping_server(ns):
+	exec_in_netns(ns, [tc.TCPPINGSERVERCMD, "-d"])
+
+def start_ping_servers(ns):
+	start_udp_ping_server(ns)
+	start_tcp_ping_server(ns)
 
 def start_anchor_ilad(number, loglevel):
 	print("Start anchor ilad %u" % number)
@@ -308,6 +324,8 @@ def make_enb(number, ran_num):
 	ns_set_ila_xlat(enb_ns, locator, tc.SIR_PREFIX)
 
 	exec_in_netns(ran_ns, [tc.ILACCMD, "loc", "make", str(number), locator])
+
+	start_ping_servers(enb_ns)
 
 def make_anchor(number, ran_num):
 	print("Make ANCHOR %u" % number)
@@ -412,3 +430,5 @@ def make_ran(number):
 	exec_in_netns(ran_ns, [tc.ILACCMD, "map", "flush"])
 
 	exec_in_netns(ran_ns, [tc.ILACTLDCMD, "-d"])
+
+	start_ping_servers(ran_ns)
