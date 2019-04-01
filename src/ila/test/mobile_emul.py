@@ -184,6 +184,8 @@ def start_gate_ilad(number):
 
 	ns_set_via_route(gw_ns, tc.LOCATOR_ROUTE, addr1, ifnam0)
 
+	ns_set_sysctl(gw_ns, "net.ipv6.process_fast", "1")
+
 def make_gateway(number, ran_num):
 	print("Make gateway %u" % number)
 
@@ -292,6 +294,8 @@ def start_anchor_ilad(number, loglevel):
 
 	exec_in_netns(anchor_ns, [tc.TCCMD, "qdisc", "add", "dev", ifnam0,
 			       "root", "netem", "delay", "10.0ms"])
+
+	exec_in_netns(anchor_ns, [tc.FASTSERVERCMD, "-d"])
 
 def make_enb(number, ran_num):
 	print("Make ENB %u" % number)

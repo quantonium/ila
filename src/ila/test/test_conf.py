@@ -49,6 +49,7 @@ AMCCMD=ILADIR + "/amc"
 UDPPINGSERVERCMD=BIN + "/udp_ping_server"
 TCPPINGSERVERCMD=BIN + "/tcp_ping_server"
 
+FASTSERVERCMD=SBIN + "/fast_server"
 REDISDIR=QDIR + "/bin"
 REDISBIN=REDISDIR + "/redis-server"
 REDISCONF= QDIR + "/etc/redis_%s.conf"
