@@ -6,4 +6,4 @@ if [ -z $QDIR ]; then
 	exit 1
 fi
 
-sudo QDIR=$QDIR PYTHONPATH="$QDIR/lib:$CWD" python3 run_ns.py "$@"
+sudo QDIR=$QDIR PYTHONPATH="$QDIR/lib:$CWD" LD_LIBRARY_PATH=$QDIR/lib python3 run_ns.py "$@"

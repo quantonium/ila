@@ -26,23 +26,41 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import sys, mobile_emul
+import sys, mobile_emul, getopt
 
-def usage():
+def usage_err(errstr):
+	if (errstr != ""):
+		print(errstr)
+		print("")
+
 	print("Usage: run_ns NS CMD { ARGS ... }")
 
-args = sys.argv
+try:
+	mypopts, args = getopt.getopt(sys.argv[1:], "u:")
+except getopt.GetoptError as e:
+        usage_err(str(e))
+        sys.exit(2)
 
-if (len(args) < 3):
-	usage()
+as_user = False
+
+for o, a in mypopts:
+	if o == '-u':
+		as_user = True
+		username = a
+
+if (len(args) < 2):
+	usage_err("Need at least two arguments")
 	sys.exit(2)
 
-ns = args[1]
-args = args[2:]
+ns = args[0]
+args = args[1:]
 
 # Ignore all excpetions here
 
 try:
-	mobile_emul.exec_in_netns(ns, args)
+	if (as_user):
+		mobile_emul.exec_user_in_netns(ns, args, username)
+	else:
+		mobile_emul.exec_in_netns(ns, args)
 except:
 	pass

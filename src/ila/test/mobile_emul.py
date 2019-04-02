@@ -59,6 +59,12 @@ def exec_in_netns(ns, cmd):
 	cmd = [tc.IPCMD, "netns", "exec", ns] + cmd
 	subprocess.run(cmd)
 
+def exec_user_in_netns(ns, cmd, username):
+	libpath = "LD_LIBRARY_PATH="+os.environ["LD_LIBRARY_PATH"]
+	print(libpath)
+	cmd = [tc.IPCMD, "netns", "exec", ns, "sudo", "-u", username, libpath] + cmd
+	subprocess.run(cmd)
+
 def exec_in_netns_null_stdout(ns, cmd):
 	cmd = [tc.IPCMD, "netns", "exec", ns] + cmd
 	subprocess.call(cmd, stdout=subprocess.DEVNULL)
