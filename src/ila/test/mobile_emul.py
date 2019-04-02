@@ -69,6 +69,9 @@ def exec_in_netns_null_stdout(ns, cmd):
 	cmd = [tc.IPCMD, "netns", "exec", ns] + cmd
 	subprocess.call(cmd, stdout=subprocess.DEVNULL)
 
+def set_tlv_prop(parms):
+	subprocess.run([tc.IPCMD, "ip6tlv", "set"] + parms)
+
 def make_netns(ns):
 	subprocess.run([tc.IPCMD, "netns", "add", ns])
 	exec_in_netns(ns, [tc.IFCONFIGCMD, "lo", "up"])
@@ -436,3 +439,15 @@ def make_ran(number):
 	exec_in_netns(ran_ns, [tc.ILACTLDCMD, "-d"])
 
 	start_ping_servers(ran_ns)
+
+	# Set up TLV rules while we're here
+
+	# Path MTU option
+	set_tlv_prop(["type", "62", "class", "1", "user-perm", "1",
+		      "align-mult", "2", "align-off", "0", "min-len",
+		      "4", "max-len", "4"])
+
+	# FAST option
+	set_tlv_prop(["type", "222", "class", "1", "user-perm", "1",
+		      "align-mult", "4", "align-off", "2", "min-len",
+		      "20", "max-len", "20"])
