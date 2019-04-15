@@ -15,6 +15,7 @@
 #include "fast.h"
 #include "qutils.h"
 #include "path_mtu.h"
+#include "linux/fast.h"
 
 bool do_daemonize;
 char *logname = "udp_ping_server";
@@ -22,13 +23,13 @@ int loglevel = LOG_ERR;
 FILE *logfile = NULL;
 int port = 7777;
 
-#define IPV6_TLV_FAST 222
-#define IPV6_TLV_PATH_MTU 0x3e
+#define IPV6_TLV_FAST 0x3e
+#define IPV6_TLV_PATH_MTU 0x3f
 
 static size_t parse_cmsg(struct msghdr *msg, struct msghdr *outmsg)
 {
 	struct cmsghdr *outcmsg = CMSG_FIRSTHDR(outmsg);
-	void *outdata = CMSG_DATA(outcmsg);
+	__u8 *outdata = (__u8 *)CMSG_DATA(outcmsg);
 	struct ipv6_opt_hdr *ioh;
 	struct cmsghdr *cmsg;
 	size_t len, optlen;
@@ -51,7 +52,7 @@ static size_t parse_cmsg(struct msghdr *msg, struct msghdr *outmsg)
 		len -= sizeof(*ioh);
 
 		/* Set up sending EH */
-		ioh = outdata;
+		ioh = (struct ipv6_opt_hdr *)outdata;
 		outlen += sizeof(*ioh);
 		outdata += sizeof(*ioh);
 
@@ -62,19 +63,20 @@ static size_t parse_cmsg(struct msghdr *msg, struct msghdr *outmsg)
 				optlen = 1;
 				break;
 			case IPV6_TLV_FAST: {
+				struct fast_opt *fo;
 				struct fast_ila *fi;
 
 				optlen = ptr[1] + 2;
 				if (optlen < sizeof(*fi))
 					break;
 
-				fi = (struct fast_ila *)ptr;
-				if ((fi->fast_type >> 4) != 1)
+				fo = (struct fast_opt *)&ptr[2];
+				if (fo->prop != FAST_TICK_ORIGIN_REFLECT)
 					break;
 
-				memcpy(outdata, fi, optlen);
-				fi = (struct fast_ila *)outdata;
-				fi->fast_type = (2 << 4);
+				memcpy(outdata, ptr, optlen);
+				fo = (struct fast_opt *)&outdata[2];
+				fo->prop = FAST_TICK_REFLECTED;
 				outdata += optlen;
 				outlen += optlen;
 
@@ -91,7 +93,7 @@ static size_t parse_cmsg(struct msghdr *msg, struct msghdr *outmsg)
 				if (optlen < sizeof(*pm))
 					break;
 
-				pm = (struct path_mtu *)ptr;
+				pm = (struct path_mtu *)&ptr[2];
 
 				forward_mtu = ntohs(pm->mtu_forward);
 				reflect_mtu = ntohs(pm->mtu_reflect);
@@ -101,7 +103,7 @@ static size_t parse_cmsg(struct msghdr *msg, struct msghdr *outmsg)
 					break;
 
 				memcpy(outdata, ptr, optlen);
-				pm = (struct path_mtu *)outdata;
+				pm = (struct path_mtu *)&outdata[2];
 
 				pm->mtu_reflect = htons(forward_mtu >> 1);
 				pm->mtu_forward = htons(0);

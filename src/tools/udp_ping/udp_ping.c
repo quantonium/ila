@@ -1,7 +1,8 @@
 #include <arpa/inet.h>
 #include <errno.h>
-#include <linux/types.h>
+#include <linux/fast.h>
 #include <linux/ipv6.h>
+#include <linux/types.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +23,7 @@ int fast_port = 6666;
 struct in6_addr fast_addr;
 bool lookup_fast;
 int do_num_opts;
+bool do_jumbo;
 
 struct udp_data {
 	__u32 seqno;
@@ -33,35 +35,37 @@ size_t psize = sizeof(struct udp_data);
 
 static void print_one(__u8 *ptr)
 {
-	struct fast_ila *fi = (struct fast_ila *)ptr;
 	char buf[INET_ADDRSTRLEN];
-	size_t len = ptr[1] + 2;
+	struct fast_opt *fo;
+	struct fast_ila *fi;
 
 	printf("Hop-by-hop\n");
-	if (len == sizeof(struct fast_ila)) {
+	if (ptr[1] == sizeof(*fo) + sizeof(*fi)) {
+		fo = (struct fast_opt *)(ptr + 2);
+		fi = (struct fast_ila *)fo->ticket;
+
 		addr64_n2a(fi->locator, buf, sizeof(buf));
 
-		printf("     Opt type: %u\n", fi->opt_type);
-		printf("     Opt len: %u\n", fi->opt_len);
-		printf("     Fast type: %u\n", fi->fast_type);
-		printf("     Reserved: %u\n", fi->rsvd);
+		printf("     Opt type: %u\n", ptr[0]);
+		printf("     Opt len: %u\n", ptr[1]);
+		printf("     Fast prop: %u\n", fo->prop);
+		printf("     Reserved: %u\n", fo->rsvd);
 		printf("     Expiration: %u\n", ntohl(fi->expiration));
 		printf("     Service profile: %u\n",
 		       ntohl(fi->service_profile));
 		printf("     Locator: %s\n", buf);
         } else {
-                printf("     Got unknown size %lu expected %lu\n",
-                       len, sizeof(struct fast_ila));
+                printf("     Got unknown size %u expected %lu\n",
+                       ptr[1] + 2, sizeof(*fo) + sizeof(*fi) + 2);
         }
 }
 
 static void print_one_path_mtu(__u8 *ptr)
 {
-	struct path_mtu *pm = (struct path_mtu *)ptr;
-	size_t len = ptr[1] + 2;
+	struct path_mtu *pm = (struct path_mtu *)&ptr[2];
 
 	printf("Path MTU\n");
-	if (len == sizeof(struct path_mtu)) {
+	if (ptr[1] == sizeof(struct path_mtu)) {
 		__u16 reflect_mtu;
 		bool reflect;
 
@@ -69,19 +73,16 @@ static void print_one_path_mtu(__u8 *ptr)
 		reflect = !!(reflect_mtu & PATH_MTU_REFLECT);
 		reflect_mtu <<= 1;
 
-		printf("     Opt type: %u\n", pm->opt_type);
-		printf("     Opt len: %u\n", pm->opt_len);
+		printf("     Opt type: %u\n", ptr[0]);
+		printf("     Opt len: %u\n", ptr[1]);
 		printf("     Forward MTU: %u\n", ntohs(pm->mtu_forward));
 		printf("     Reflect: %s\n", reflect ? "yes" : "no");
 		printf("     Reflected MTU: %u\n", reflect_mtu);
         } else {
-                printf("     Got unknown size %lu expected %lu\n",
-                       len, sizeof(struct path_mtu));
+                printf("     Got unknown size %u expected %lu\n",
+                       ptr[1] + 2, sizeof(struct path_mtu) + 2);
         }
 }
-
-#define IPV6_TLV_FAST 222
-#define IPV6_TLV_PATH_MTU 0x3e
 
 static void parse_hopopt(__u8 *ptr)
 {
@@ -127,11 +128,6 @@ static void parse_cmsg(struct msghdr *msg)
 			parse_hopopt(CMSG_DATA(cmsg));
         }
 }
-
-#define CMSG_OK(mhdr, cmsg) ((cmsg)->cmsg_len >= sizeof(struct cmsghdr) && \
-                             (cmsg)->cmsg_len <= (unsigned long) \
-                             ((mhdr)->msg_controllen - \
-                              ((char *)(cmsg) - (char *)(mhdr)->msg_control)))
 
 static void udp_client(struct in6_addr *in6)
 {
@@ -185,10 +181,10 @@ static void udp_client(struct in6_addr *in6)
 	iov[0].iov_base = buf;
 	iov[0].iov_len = psize;
 
-	if (fast_ctx || do_num_opts) {
+	if (fast_ctx || do_num_opts || do_jumbo) {
 		struct ipv6_opt_hdr *ioh;
 		size_t len = 0, rlen;
-		void *data;
+		__u8 *data;
 
 		msg.msg_control = cbuf;
 		msg.msg_controllen = sizeof(cbuf);
@@ -198,7 +194,7 @@ static void udp_client(struct in6_addr *in6)
 		cmsg->cmsg_len = CMSG_LEN(sizeof(cbuf));
 
 		ioh = (struct ipv6_opt_hdr *)CMSG_DATA(cmsg);
-		data = &ioh[1];
+		data = (__u8 *)&ioh[1];
 		len = 2;
 
 		if (fast_ctx) {
@@ -220,7 +216,7 @@ static void udp_client(struct in6_addr *in6)
 		if (do_num_opts) {
 			struct path_mtu *pm;
 
-			rlen = do_num_opts * sizeof(*pm);
+			rlen = do_num_opts * (2 + sizeof(*pm));
 
 			if (rlen > sizeof(cbuf) - len) {
 				fprintf(stderr, "Too big\n");
@@ -228,16 +224,25 @@ static void udp_client(struct in6_addr *in6)
 			}
 
 
-			pm = data;
-
 			for (i = 0; i < do_num_opts; i++, pm++) {
-				pm->opt_type = IPV6_TLV_PATH_MTU;
-				pm->opt_len = sizeof(*pm) - 2;
+				data[0] = IPV6_TLV_PATH_MTU;
+				data[1] = sizeof(*pm);
+				pm = (struct path_mtu *)&data[2];
 				pm->mtu_forward = htons(20000 + i);
 				pm->mtu_reflect = htons(PATH_MTU_REFLECT);
 			}
 			len += rlen;
 			data += rlen;
+		}
+
+		if (do_jumbo) {
+			data[0] = IPV6_TLV_JUMBO;
+			data[1] = 4;
+
+			*(__u32 *)&data[2] = 0;
+			
+			len += sizeof(__u32);
+			data += sizeof(__u32);
 		}
 
 		if (len > 2) {
@@ -330,7 +335,7 @@ int main(int argc, char *argv[])
 	struct in6_addr in6;
 	int c;
 
-	while ((c = getopt(argc, argv, "s:vp:P:F:M:")) != -1) {
+	while ((c = getopt(argc, argv, "s:vp:P:F:M:J")) != -1) {
 		switch (c) {
 		case 's':
 			psize = atoi(optarg);
@@ -355,6 +360,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'M':
 			do_num_opts = atoi(optarg);
+			break;
+		case 'J':
+			do_jumbo = true;
 			break;
 		default:
 			usage(argv[0]);
