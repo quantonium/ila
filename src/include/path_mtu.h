@@ -33,8 +33,6 @@
 #include <stdbool.h>
 
 struct path_mtu {
-	__u8 opt_type;
-	__u8 opt_len;
 	__u16 mtu_forward;
 	__u16 mtu_reflect;
 } __attribute((packed));
