@@ -86,7 +86,7 @@ def make_FAST_eh(map_tuple):
 	# 4 byte expiration time, 4 byte service parameters,
 	# and 8 byte locator
 
-	val = struct.pack("<BBBBBBIIQ", 222,
+	val = struct.pack("<BBBBBBIIQ", 0x3e,
 			  (24 - 4), 1 << 4, 0, 0, 0, socket.ntohl(44),
 			  socket.ntohl(127), map_tuple.locator)
 
