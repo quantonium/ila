@@ -27,15 +27,17 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <arpa/inet.h>
-#include <stdio.h>
 #include <curl/curl.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <linux/types.h>
+#include <linux/fast.h>
 #include <linux/ipv6.h>
+#include <linux/types.h>
+#include <netinet/in.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/socket.h>
+
 #include "fast.h"
  
 struct query_data {
@@ -71,18 +73,23 @@ static int addr64_n2a(__u64 addr, char *buff, size_t len)
 
 static void print_one(__u8 *ptr)
 {
-	struct fast_ila *fi = (struct fast_ila *)ptr;
 	char buf[INET_ADDRSTRLEN];
-	size_t len = ptr[1] + 2;
+	struct fast_opt *fo;
+	struct fast_ila *fi;
+	size_t len = ptr[1];
 
 	printf("Got ILA Hop-by-hop\n");
-	if (len == sizeof(struct fast_ila)) {
+
+	if (len == sizeof(*fo) + sizeof(*fi)) {
+		fo = (struct fast_opt *)(ptr + 2);
+		fi = (struct fast_ila *)fo->ticket;
+
 		addr64_n2a(fi->locator, buf, sizeof(buf));
 
-		printf("     Opt type: %u\n", fi->opt_type);
-		printf("     Opt len: %u\n", fi->opt_len);
-		printf("     Fast type: %u\n", fi->fast_type);
-		printf("     Reserved: %u\n", fi->rsvd);
+		printf("     Opt type: %u\n", ptr[0]);
+		printf("     Opt len: %u\n", ptr[1]);
+		printf("     Fast prop: %u\n", fo->prop);
+		printf("     Reserved: %u\n", fo->rsvd);
 		printf("     Expiration: %u\n", ntohl(fi->expiration));
 		printf("     Service profile: %u\n",
 		       ntohl(fi->service_profile));
@@ -93,14 +100,11 @@ static void print_one(__u8 *ptr)
         }
 }
 
-#define IPV6_TLV_FAST 222
-
 static size_t function_pt(void *indata, size_t size, size_t nmemb, void *data)
 {
 	struct query_data *qd = data;
 	size_t len, optlen;
 	__u8 *ptr = indata;
-	int i;
 
 	size = size * nmemb;
 	len = size;
@@ -111,11 +115,6 @@ static size_t function_pt(void *indata, size_t size, size_t nmemb, void *data)
 
 	if (!qd->verbose)
 		return size;
-
-	for (i = 0; i < size; i++)
-		printf("%02x ", ptr[i]);
-
-	printf("\n");
 
 	while (len > 0) {
 		switch (*ptr) {
@@ -167,14 +166,14 @@ size_t fast_query_verbose(struct in6_addr *dst, void *ctx, void *buf,
 			  size_t len, struct in6_addr *http_addr,
 			  int http_port, bool verbose)
 {
+	char abuf[INET6_ADDRSTRLEN];
+	char hbuf[INET6_ADDRSTRLEN];
 	struct fast_ctx *fc = ctx;
 	CURL *curl = fc->curl;
 	struct query_data qd;
-	CURLcode res;
 	size_t ret = 0;
-	char abuf[INET6_ADDRSTRLEN];
-	char hbuf[INET6_ADDRSTRLEN];
 	char tbuf[100];
+	CURLcode res;
 
 	qd.buf = buf;
 	qd.len = len;
