@@ -1,5 +1,5 @@
-#include <arpa/inet.h>
 #include <errno.h>
+#include <linux/fast.h>
 #include <linux/ipv6.h>
 #include <linux/types.h>
 #include <netdb.h>
@@ -23,6 +23,7 @@ struct in6_addr fast_addr;
 bool lookup_fast;
 int do_num_opts;
 bool set_indiv_tlvs = true;
+int clear_cnt;
 
 struct tcp_data {
 	__u32 length;
@@ -33,22 +34,29 @@ struct tcp_data {
 
 size_t psize = sizeof(struct tcp_data);
 
-#define IPV6_TLV_FAST 222
-#define IPV6_TLV_PATH_MTU 0x3e
-
 static void set_one_tlv(int fd, void *data, size_t len)
 {
 	if (setsockopt(fd, IPPROTO_IPV6, IPV6_HOPOPTS_TLV, data, len) < 0) {
-		perror("setsockopt IPV6_HOPOPTS");
+		perror("setsockopt IPV6_HOPOPTS_TLV");
 		exit(-1);
+	}
+}
+
+static void clear_one_tlv(int fd, void *data, size_t len)
+{
+	if (setsockopt(fd, IPPROTO_IPV6, IPV6_HOPOPTS_DEL_TLV, data, len) < 0) {
+		if (errno != ENOENT) {
+			perror("setsockopt IPV6_HOPOPTS_DEL_TLV");
+			exit(-1);
+		}
 	}
 }
 
 static void setup_options(int fd)
 {
-	struct sockaddr_in6 sin6;
 	char cbuf[10000];
-	void *data = cbuf;
+	__u8 *data = (__u8 *)cbuf;
+	struct sockaddr_in6 sin6;
 	size_t len = 0;
 	socklen_t alen;
 	size_t rlen;
@@ -87,11 +95,11 @@ static void setup_options(int fd)
 			exit(-1);
 		}
 
-		pm = data;
+		pm = (struct path_mtu *)&data[2];
 
 		for (i = 0; i < do_num_opts; i++, pm++) {
-			pm->opt_type = IPV6_TLV_PATH_MTU;
-			pm->opt_len = sizeof(*pm) - 2;
+			data[0] = IPV6_TLV_PATH_MTU;
+			data[1] = sizeof(*pm);
 			pm->mtu_forward = htons(20000 + i);
 			pm->mtu_reflect = htons(PATH_MTU_REFLECT);
 			if (set_indiv_tlvs)
@@ -114,6 +122,25 @@ static void setup_options(int fd)
 	}
 }
 
+static void unset_options(int fd)
+{
+	struct fast_opt *fo;
+	__u8 opt[4];
+
+	opt[0] = IPV6_TLV_FAST;
+	opt[1] = 2;
+	opt[2] = 0;
+	opt[3] = 0;
+
+	fo = (struct fast_opt *)&opt[2];
+
+	fo->prop = FAST_TICK_ORIGIN_NOREFLECT;
+	clear_one_tlv(fd, opt, 4);
+
+	fo->prop = FAST_TICK_ORIGIN_REFLECT;
+	clear_one_tlv(fd, opt, 4);
+}
+
 static void tcp_client(struct in6_addr *in6)
 {
 	struct sockaddr_in6 sin6;
@@ -126,6 +153,7 @@ static void tcp_client(struct in6_addr *in6)
 	unsigned int seqno = 0;
 	struct msghdr msg, msg2;
 	struct iovec iov[1], iov2[1];
+	int count = 0;
 
 	fd = socket(AF_INET6, SOCK_STREAM, 0);
 	if (fd < 0) {
@@ -160,6 +188,15 @@ static void tcp_client(struct in6_addr *in6)
 	while(1) {
 		double delta;
 		char abuf[INET6_ADDRSTRLEN];
+
+		count++;
+
+		if (clear_cnt) {
+			if (count % (clear_cnt * 2) == clear_cnt)
+				unset_options(fd);
+			if (count % (clear_cnt * 2) == 0)
+				setup_options(fd);
+		}
 
 		ud->length = psize;
 		ud->seqno = ++seqno;
@@ -218,7 +255,7 @@ int main(int argc, char *argv[])
 	struct in6_addr in6;
 	int c;
 
-	while ((c = getopt(argc, argv, "s:vp:P:F:M:")) != -1) {
+	while ((c = getopt(argc, argv, "s:vp:P:F:M:X:")) != -1) {
 		switch (c) {
 		case 's':
 			psize = atoi(optarg);
@@ -243,6 +280,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'M':
 			do_num_opts = atoi(optarg);
+			break;
+		case 'X':
+			clear_cnt = atoi(optarg);
 			break;
 		default:
 			usage(argv[0]);
