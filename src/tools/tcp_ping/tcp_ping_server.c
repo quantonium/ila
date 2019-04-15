@@ -15,108 +15,11 @@
 #include "path_mtu.h"
 #include "qutils.h"
 
-struct fast_ila {
-	__u8 nextproto;;
-	__u8 len;
-	__u8 opt_type;
-	__u8 opt_len;
-	__u8 fast_type;
-	__u8 rsvd;
-	__u16 rsvd2;
-	__u32 expiration;
-	__u32 service_profile;
-	__u64 locator;
-} __attribute((packed));
-
 bool do_daemonize;
 char *logname = "tcp_ping_server";
 int loglevel = LOG_ERR;
 FILE *logfile = NULL;
 int port = 7777;
-
-#define IPV6_TLV_FAST 222
-#define IPV6_TLV_PATH_MTU 0x3e
-
-static size_t parse_cmsg(struct msghdr *msg, struct msghdr *outmsg)
-{
-	struct cmsghdr *cmsg, *outcmsg;
-	struct fast_ila *fi;
-	struct path_mtu *pm;
-	size_t len;
-
-	/* Receive auxiliary data in msg */
-	for (cmsg = CMSG_FIRSTHDR(msg); cmsg != NULL;
-	    cmsg = CMSG_NXTHDR(msg, cmsg)) {
-		if (cmsg->cmsg_level == SOL_IPV6 &&
-		    cmsg->cmsg_type == IPV6_HOPOPTS) {
-			switch (CMSG_DATA(cmsg)[2]) {
-			case IPV6_TLV_FAST:
-				fi = (struct fast_ila *)CMSG_DATA(cmsg);
-				if ((fi->fast_type >> 4) == 1)
-					goto found;
-				break;
-			case IPV6_TLV_PATH_MTU:
-				pm = (struct path_mtu *)CMSG_DATA(cmsg);
-				goto found_path_mtu;
-			default:
-				break;
-			}
-		}
-	}
-
-	return 0;
-
-found:
-	len = (fi->len + 1) << 3;
-
-	outcmsg = CMSG_FIRSTHDR(outmsg);
-	outcmsg->cmsg_level = SOL_IPV6;
-	outcmsg->cmsg_type = IPV6_HOPOPTS;
-	outcmsg->cmsg_len = CMSG_LEN(len);
-
-	memcpy(CMSG_DATA(outcmsg), fi, len);
-
-	fi = (struct fast_ila *)CMSG_DATA(outcmsg);
-	fi->fast_type = (2 << 4);
-
-	return outcmsg->cmsg_len;
-found_path_mtu:
-	len = (pm->opt_len + 1) << 3;
-
-	outcmsg = CMSG_FIRSTHDR(outmsg);
-	outcmsg->cmsg_level = SOL_IPV6;
-	outcmsg->cmsg_type = IPV6_HOPOPTS;
-	outcmsg->cmsg_len = CMSG_LEN(len);
-
-	memcpy(CMSG_DATA(outcmsg), pm, len);
-
-	pm = (struct path_mtu *)(CMSG_DATA(outcmsg) + 2);
-
-	if (len - 2 >= sizeof(struct path_mtu)) {
-		__u16 reflect_mtu;
-		__u16 forward_mtu;
-		bool reflect;
-
-		forward_mtu = ntohs(pm->mtu_forward);
-		reflect_mtu = ntohs(pm->mtu_reflect);
-		reflect = !!(reflect_mtu & PATH_MTU_REFLECT);
-		reflect_mtu <<= 1;
-
-		printf("     Opt type: %u\n", pm->opt_type);
-		printf("     Opt len: %u\n", pm->opt_len);
-		printf("     Forward MTU: %u\n", forward_mtu);
-		printf("     Reflect: %s\n", reflect ? "yes" : "no");
-		printf("     Reflected MTU: %u\n", reflect_mtu);
-
-		pm->mtu_reflect = htons(forward_mtu >> 1);
-		pm->mtu_forward = htons(0);
-	} else {
-		printf("     Got unknown size %lu expected %lu\n",
-			len - 2, sizeof(struct path_mtu));
-        }
-
-	return outcmsg->cmsg_len;
-}
 
 static void process_conn(int fd, struct sockaddr_in6 *cliaddr)
 {
@@ -168,10 +71,7 @@ static void process_conn(int fd, struct sockaddr_in6 *cliaddr)
 		msg2.msg_control=cbuf2;
 		msg2.msg_controllen=sizeof(cbuf2);
 
-		if (msg.msg_controllen)
-			msg2.msg_controllen = parse_cmsg(&msg, &msg2);
-		else
-			msg2.msg_controllen = 0;
+		msg2.msg_controllen = 0;
 
 		n1 = sendmsg(fd, &msg2, 0);
 		if (n1 < 0) {
