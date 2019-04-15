@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ WITH Linux-syscall-note */
 /*
  *	Types and definitions for AF_INET6 
  *	Linux INET6 implementation 
@@ -18,8 +19,8 @@
  *      2 of the License, or (at your option) any later version.
  */
 
-#ifndef _LINUX_IN6_H
-#define _LINUX_IN6_H
+#ifndef _UAPI_LINUX_IN6_H
+#define _UAPI_LINUX_IN6_H
 
 #include <linux/types.h>
 #include <linux/libc-compat.h>
@@ -146,6 +147,8 @@ struct in6_flowlabel_req {
 #define IPV6_TLV_CALIPSO	7	/* RFC 5570 */
 #define IPV6_TLV_JUMBO		194
 #define IPV6_TLV_HAO		201	/* home address option */
+#define IPV6_TLV_FAST		0x3e
+#define IPV6_TLV_PATH_MTU	0x3f
 
 /*
  *	IPV6 socket options
@@ -176,6 +179,8 @@ struct in6_flowlabel_req {
 #define IPV6_V6ONLY		26
 #define IPV6_JOIN_ANYCAST	27
 #define IPV6_LEAVE_ANYCAST	28
+#define IPV6_MULTICAST_ALL	29
+#define IPV6_ROUTER_ALERT_ISOLATE	30
 
 /* IPV6_MTU_DISCOVER values */
 #define IPV6_PMTUDISC_DONT		0
@@ -284,12 +289,16 @@ struct in6_flowlabel_req {
 #define IPV6_TRANSPARENT        75
 #define IPV6_UNICAST_IF         76
 #define IPV6_RECVFRAGSIZE	77
+#define IPV6_FREEBIND		78
 
 /* API to set single Destination or Hop-by-Hop options */
 
-#define IPV6_HOPOPTS_TLV        79
-#define IPV6_RTHDRDSTOPTS_TLV   80
-#define IPV6_DSTOPTS_TLV        81
+#define IPV6_HOPOPTS_TLV               79
+#define IPV6_RTHDRDSTOPTS_TLV          80
+#define IPV6_DSTOPTS_TLV               81
+#define IPV6_HOPOPTS_DEL_TLV           82
+#define IPV6_RTHDRDSTOPTS_DEL_TLV      83
+#define IPV6_DSTOPTS_DEL_TLV           84
 
 /*
  * Multicast Routing:
@@ -300,41 +309,52 @@ struct in6_flowlabel_req {
  * MRT6_MAX
  */
 
+/* Flags for EH type that can use a TLV option */
+#define IPV6_TLV_CLASS_FLAG_HOPOPT	BIT(0)
+#define IPV6_TLV_CLASS_FLAG_RTRDSTOPT	BIT(1)
+#define IPV6_TLV_CLASS_FLAG_DSTOPT	BIT(2)
+#define IPV6_TLV_CLASS_MAX		((1 << 3) - 1)
+
+#define IPV6_TLV_CLASS_ANY_DSTOPT      (IPV6_TLV_CLASS_FLAG_RTRDSTOPT | \
+					IPV6_TLV_CLASS_FLAG_DSTOPT)
 /* NETLINK_GENERIC related info for IPv6 TLVs */
 
 #define IPV6_TLV_GENL_NAME	"ipv6-tlv"
 #define IPV6_TLV_GENL_VERSION	0x1
 
 enum {
-	IPV6_TLV_ATTR_ORDER,			/* binary with length 256 */
-	IPV6_TLV_ATTR_PERM,			/* binary with length 256 */
+	IPV6_TLV_ATTR_UNSPEC,
+	IPV6_TLV_ATTR_TYPE,			/* u8, > 1 */
+	IPV6_TLV_ATTR_ORDER,			/* u8 */
+	IPV6_TLV_ATTR_ADMIN_PERM,		/* u8, perm value */
+	IPV6_TLV_ATTR_USER_PERM,		/* u8, perm value */
+	IPV6_TLV_ATTR_CLASS,			/* u8, 3 bit flags */
+	IPV6_TLV_ATTR_ALIGN_MULT,		/* u8, 1 to 16 */
+	IPV6_TLV_ATTR_ALIGN_OFF,		/* u8, 0 to 15 */
+	IPV6_TLV_ATTR_MIN_DATA_LEN,		/* u8 (option data length) */
+	IPV6_TLV_ATTR_MAX_DATA_LEN,		/* u8 (option data length) */
+	IPV6_TLV_ATTR_DATA_LEN_MULT,		/* u8, 1 to 16 */
+	IPV6_TLV_ATTR_DATA_LEN_OFF,		/* u8, 0 to 15 */
 
 	__IPV6_TLV_ATTR_MAX,
 };
 
-#define IPV6_TLV_ATTR_MAX		(__IPV6_TLV_ATTR_MAX - 1)
+#define IPV6_TLV_ATTR_MAX              (__IPV6_TLV_ATTR_MAX - 1)
 
 enum {
-        IPV6_TLV_CMD_SET,
+	IPV6_TLV_CMD_SET,
+	IPV6_TLV_CMD_UNSET,
 	IPV6_TLV_CMD_GET,
 
-        __IPV6_TLV_CMD_MAX,
+	__IPV6_TLV_CMD_MAX,
 };
 
+/* TLV permissions values */
 enum {
 	IPV6_TLV_PERM_NONE,
-	IPV6_TLV_PERM_ADMIN_CHECK,
-	IPV6_TLV_PERM_ADMIN,
-	IPV6_TLV_PERM_ANY_CHECK,
-	IPV6_TLV_PERM_ANY,
-	IPV6_TLV_PERM_MAX = IPV6_TLV_PERM_ANY
+	IPV6_TLV_PERM_WITH_CHECK,
+	IPV6_TLV_PERM_NO_CHECK,
+	IPV6_TLV_PERM_MAX = IPV6_TLV_PERM_NO_CHECK
 };
 
-#define IPV6_TLV_CLASS_FLAG_HOPOPT      0x1
-#define IPV6_TLV_CLASS_FLAG_RTRDSTOPT   0x2
-#define IPV6_TLV_CLASS_FLAG_DSTOPT      0x4
-
-#define IPV6_TLV_CLASS_ANY_DSTOPT	(IPV6_TLV_CLASS_FLAG_RTRDSTOPT | \
-					 IPV6_TLV_CLASS_FLAG_DSTOPT)
-
-#endif /* _LINUX_IN6_H */
+#endif /* _UAPI_LINUX_IN6_H */
