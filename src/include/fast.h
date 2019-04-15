@@ -33,11 +33,7 @@
 #include <stdbool.h>
 
 struct fast_ila {
-	__u8 opt_type;
-	__u8 opt_len;
-	__u8 fast_type;
-	__u8 rsvd;
-	__u16 rsvd2;
+	__u16 rsvd;
 	__u32 expiration;
 	__u32 service_profile;
 	__u64 locator;
